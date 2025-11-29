@@ -6,6 +6,9 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ExchangeRateController;
 use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\FavoriteController;
+use App\Http\Controllers\Api\CommentController;
+use App\Http\Controllers\Api\EnrollmentController;
 
 // Rutas públicas (sin autenticación)
 Route::prefix('api')->group(function () {
@@ -20,6 +23,9 @@ Route::prefix('api')->group(function () {
     // Categorías
     Route::get('/categories', [CategoryController::class, 'index']);
     Route::get('/categories/{category}', [CategoryController::class, 'show']);
+
+    // Comentarios (solo lectura)
+    Route::get('/comments/{courseId}', [CommentController::class, 'index']);
 
     // Exchange Rates
     Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
@@ -42,6 +48,21 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function () {
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::put('/categories/{category}', [CategoryController::class, 'update']);
     Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
+
+    // Favoritos
+    Route::get('/favorites', [FavoriteController::class, 'index']);
+    Route::post('/favorites', [FavoriteController::class, 'store']); // Toggle
+    Route::delete('/favorites/{courseId}', [FavoriteController::class, 'destroy']);
+
+    // Comentarios
+    Route::post('/comments', [CommentController::class, 'store']);
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
+
+    // Enrollments (Inscripciones)
+    Route::get('/enrollments', [EnrollmentController::class, 'index']);
+    Route::post('/enrollments', [EnrollmentController::class, 'store']);
+    Route::get('/enrollments/{courseId}', [EnrollmentController::class, 'show']);
+    Route::delete('/enrollments/{courseId}', [EnrollmentController::class, 'destroy']);
 
     // Exchange Rates (admin)
     Route::post('/exchange-rates/refresh', [ExchangeRateController::class, 'refresh']);
