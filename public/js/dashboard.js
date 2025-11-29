@@ -110,8 +110,8 @@ async function loadInscripciones() {
             card.onclick = () => showCourseDetail(course);
             
             card.innerHTML = `
-                <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center">
-                    <span class="text-white text-4xl">📚</span>
+                <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
+                    ${course.image_url ? `<img src="${course.image_url}" alt="${course.name}" class="w-full h-full object-cover">` : `<span class="text-white text-4xl">📚</span>`}
                 </div>
                 <div class="p-4">
                     <h3 class="font-bold text-lg text-secondary mb-2">${course.name}</h3>
@@ -166,8 +166,8 @@ async function loadFavoritos() {
             card.onclick = () => showCourseDetail(course);
             
             card.innerHTML = `
-                <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center">
-                    <span class="text-white text-4xl">⭐</span>
+                <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
+                    ${course.image_url ? `<img src="${course.image_url}" alt="${course.name}" class="w-full h-full object-cover">` : `<span class="text-white text-4xl">⭐</span>`}
                 </div>
                 <div class="p-4">
                     <h3 class="font-bold text-lg text-secondary mb-2">${course.name}</h3>
