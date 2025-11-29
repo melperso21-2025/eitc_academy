@@ -20,14 +20,15 @@ class AuthController extends Controller
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => 'required|string|email|unique:users',
-                'password' => 'required|string|min:6|confirmed',
+                'password' => 'required|string|min:6',
+                'role' => 'sometimes|in:student,admin', // Opcional, por defecto student
             ]);
 
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
-                'role' => 'student', // Por defecto, nuevo usuario es student
+                'role' => $validated['role'] ?? 'student', // Usar role del request o default a student
             ]);
 
             $token = $user->createToken('api-token')->plainTextToken;

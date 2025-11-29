@@ -20,6 +20,39 @@
     </script>
 </head>
 <body class="bg-gray-50">
+    <script>
+        // Verificar que el usuario es admin antes de mostrar el panel
+        function checkAdminAccess() {
+            const authToken = localStorage.getItem('authToken');
+            const currentUserStr = localStorage.getItem('currentUser');
+
+            if (!authToken || !currentUserStr) {
+                alert('Debes iniciar sesión primero');
+                window.location.href = 'index.html';
+                return false;
+            }
+
+            try {
+                const currentUser = JSON.parse(currentUserStr);
+                if (currentUser.role !== 'admin') {
+                    alert('No tienes permiso para acceder al panel admin. Solo los administradores pueden entrar aquí.');
+                    window.location.href = 'index.html';
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                alert('Error al verificar permisos');
+                window.location.href = 'index.html';
+                return false;
+            }
+        }
+
+        // Ejecutar verificación cuando carga la página
+        if (!checkAdminAccess()) {
+            document.body.innerHTML = '<div class="flex items-center justify-center h-screen"><p class="text-gray-600">Redirigiendo...</p></div>';
+        }
+    </script>
+
     <!-- Navbar Admin -->
     <nav class="bg-primary text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
