@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Dashboard - EITC Academy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#003A5D',
+                        secondary: '#1A1A1A',
+                        accent: '#0BBF78',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navbar -->
+    <nav class="bg-primary text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="flex items-center space-x-2 hover:opacity-80 transition">
+                        <div class="w-8 h-8 bg-accent rounded-lg"></div>
+                        <span class="font-bold text-xl">EITC Academy</span>
+                    </a>
+                </div>
+                <div class="flex space-x-4">
+                    <span id="userName" class="text-gray-200"></span>
+                    <button onclick="logoutUser()" class="px-4 py-2 bg-red-600 rounded hover:bg-red-700 transition">Cerrar Sesión</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-4xl font-bold text-secondary mb-2">Mi Dashboard</h1>
+            <p class="text-gray-600">Gestiona tus inscripciones, favoritos y progreso en los cursos</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex flex-wrap gap-4 mb-8 border-b border-gray-300">
+            <button onclick="switchTab('inscripciones')" id="tabInscripciones" class="px-4 py-3 font-bold text-primary border-b-4 border-accent hover:opacity-80 transition">
+                Mis Inscripciones
+            </button>
+            <button onclick="switchTab('favoritos')" id="tabFavoritos" class="px-4 py-3 font-bold text-gray-600 border-b-4 border-transparent hover:text-primary transition">
+                Mis Favoritos
+            </button>
+            <button onclick="switchTab('perfil')" id="tabPerfil" class="px-4 py-3 font-bold text-gray-600 border-b-4 border-transparent hover:text-primary transition">
+                Mi Perfil
+            </button>
+        </div>
+
+        <!-- Tab: Mis Inscripciones -->
+        <div id="tabInscripcionesContent" class="space-y-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-secondary">Cursos Inscritos</h2>
+                <span id="countInscripciones" class="text-lg font-bold text-accent">0 cursos</span>
+            </div>
+            
+            <div id="inscripcionesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Los cursos inscritos se cargarán aquí -->
+            </div>
+        </div>
+
+        <!-- Tab: Mis Favoritos -->
+        <div id="tabFavoritosContent" class="hidden space-y-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-secondary">Cursos Favoritos</h2>
+                <span id="countFavoritos" class="text-lg font-bold text-accent">0 cursos</span>
+            </div>
+            
+            <div id="favoritosContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Los favoritos se cargarán aquí -->
+            </div>
+        </div>
+
+        <!-- Tab: Mi Perfil -->
+        <div id="tabPerfilContent" class="hidden space-y-6">
+            <h2 class="text-2xl font-bold text-secondary mb-6">Mi Perfil</h2>
+            
+            <div class="bg-white rounded-lg shadow p-8 max-w-2xl">
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold text-secondary mb-2">Nombre</label>
+                        <p id="perfilNombre" class="px-4 py-2 border border-gray-300 rounded bg-gray-50 text-secondary">Cargando...</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-secondary mb-2">Email</label>
+                        <p id="perfilEmail" class="px-4 py-2 border border-gray-300 rounded bg-gray-50 text-secondary">Cargando...</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-secondary mb-2">Rol</label>
+                        <p id="perfilRol" class="px-4 py-2 border border-gray-300 rounded bg-gray-50 text-secondary">Cargando...</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-300">
+                        <div class="bg-gradient-to-br from-primary to-blue-900 text-white rounded-lg p-6 text-center">
+                            <p class="text-3xl font-bold" id="statsInscripciones">0</p>
+                            <p class="text-sm">Cursos Inscritos</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-accent to-green-600 text-white rounded-lg p-6 text-center">
+                            <p class="text-3xl font-bold" id="statsFavoritos">0</p>
+                            <p class="text-sm">Favoritos</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-purple-600 to-pink-600 text-white rounded-lg p-6 text-center">
+                            <p class="text-3xl font-bold" id="statsComentarios">0</p>
+                            <p class="text-sm">Comentarios</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalle del Curso -->
+    <div id="courseDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+        <div class="bg-white rounded-lg p-8 max-w-2xl w-full my-8">
+            <button onclick="closeCourseDetail()" class="text-gray-600 float-right text-2xl hover:text-secondary">&times;</button>
+            <div id="courseDetailContent">
+                <!-- Contenido dinámico del curso -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-secondary text-white py-12 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h4 class="text-lg font-bold mb-4">EITC Academy</h4>
+                    <p class="text-gray-400">Plataforma de formación especializada en energía eléctrica y procesos industriales.</p>
+                </div>
+                <div>
+                    <h4 class="text-lg font-bold mb-4">Enlaces Rápidos</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="/" class="hover:text-white transition">Catálogo</a></li>
+                        <li><a href="/dashboard.html" class="hover:text-white transition">Mi Dashboard</a></li>
+                        <li><a href="/" class="hover:text-white transition">Contacto</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-bold mb-4">Contacto</h4>
+                    <p class="text-gray-400">Email: info@eitcacademy.com</p>
+                    <p class="text-gray-400">Teléfono: +51 999 999 999</p>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
+                <p>&copy; 2025 EITC Academy. Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

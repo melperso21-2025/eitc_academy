@@ -335,10 +335,16 @@ function updateUIAfterAuth() {
 function showLogoutMenu() {
     const menu = document.createElement('div');
     menu.className = 'fixed top-16 right-4 bg-white shadow-lg rounded-lg overflow-hidden z-50';
-    menu.innerHTML = `
-        <a href="/admin.html" class="block px-4 py-2 text-secondary hover:bg-gray-100 transition">Panel Admin</a>
-        <button onclick="logout()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 transition">Cerrar Sesión</button>
-    `;
+    
+    let menuHTML = '';
+    if (currentUser.role === 'admin') {
+        menuHTML += '<a href="/admin.html" class="block px-4 py-2 text-secondary hover:bg-gray-100 transition">Panel Admin</a>';
+    } else {
+        menuHTML += '<a href="/dashboard.html" class="block px-4 py-2 text-secondary hover:bg-gray-100 transition">Mi Dashboard</a>';
+    }
+    menuHTML += '<button onclick="logout()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 transition">Cerrar Sesión</button>';
+    
+    menu.innerHTML = menuHTML;
     document.body.appendChild(menu);
     
     // Cerrar menú al hacer clic fuera
