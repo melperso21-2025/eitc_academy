@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body>
+    <h1>¡Servidor funcionando!</h1>
+    <p>Si ves esto, el servidor está activo y sirviendo HTML correctamente.</p>
+    <button onclick="testAPI()">Probar API</button>
+    
+    <script>
+        async function testAPI() {
+            try {
+                const response = await fetch('http://localhost:8000/api/courses');
+                const data = await response.json();
+                console.log('API Response:', data);
+                alert('API funciona: ' + data.data.length + ' cursos encontrados');
+            } catch (error) {
+                alert('Error en API: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
