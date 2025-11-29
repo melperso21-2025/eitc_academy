@@ -1,3 +1,8 @@
+// ============= CONFIGURACIÓN GLOBAL =============
+const API_BASE_URL = 'http://localhost:8000/api';
+let authToken = localStorage.getItem('authToken') || null;
+let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
 // ============= CARGAR CAMBIOS DE MONEDA =============
 let exchangeRates = {};
 
