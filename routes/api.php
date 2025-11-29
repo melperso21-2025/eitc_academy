@@ -12,33 +12,32 @@ use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\ImageUploadController;
 
 // Rutas públicas (sin autenticación)
-Route::prefix('api')->group(function () {
-    // Autenticación
-    Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
 
-    // Cursos (solo lectura pública)
-    Route::get('/courses', [CourseController::class, 'index']);
-    Route::get('/courses/{course}', [CourseController::class, 'show']);
+// Autenticación
+Route::post('/auth/register', [AuthController::class, 'register']);
+Route::post('/auth/login', [AuthController::class, 'login']);
 
-    // Categorías
-    Route::get('/categories', [CategoryController::class, 'index']);
-    Route::get('/categories/{category}', [CategoryController::class, 'show']);
+// Cursos (solo lectura pública)
+Route::get('/courses', [CourseController::class, 'index']);
+Route::get('/courses/{course}', [CourseController::class, 'show']);
 
-    // Comentarios (solo lectura)
-    Route::get('/comments/{courseId}', [CommentController::class, 'index']);
+// Categorías
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/{category}', [CategoryController::class, 'show']);
 
-    // Exchange Rates
-    Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
-    Route::get('/exchange-rates/{currency}', [ExchangeRateController::class, 'show']);
-    Route::get('/exchange-rates/convert', [ExchangeRateController::class, 'convert']);
+// Comentarios (solo lectura)
+Route::get('/comments/{courseId}', [CommentController::class, 'index']);
 
-    // Upload genérico (público)
-    Route::post('/upload-image', [ImageUploadController::class, 'uploadImage']);
-});
+// Exchange Rates
+Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
+Route::get('/exchange-rates/{currency}', [ExchangeRateController::class, 'show']);
+Route::get('/exchange-rates/convert', [ExchangeRateController::class, 'convert']);
+
+// Upload genérico (público)
+Route::post('/upload-image', [ImageUploadController::class, 'uploadImage']);
 
 // Rutas que requieren autenticación (Sanctum)
-Route::middleware('auth:sanctum')->prefix('api')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     // Autenticación autenticada
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
