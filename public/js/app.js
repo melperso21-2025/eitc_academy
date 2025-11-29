@@ -96,6 +96,11 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             body: JSON.stringify({ email, password })
         });
 
+        if (!response.success) {
+            showNotification(response.message, 'error');
+            return;
+        }
+
         authToken = response.data.token;
         currentUser = response.data.user;
         
@@ -105,6 +110,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         showNotification('¡Sesión iniciada correctamente!');
         closeModal('login');
         updateUIAfterAuth();
+        location.reload();
         
     } catch (error) {
         showNotification('Error en el login: ' + error.message, 'error');
@@ -130,6 +136,11 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
             body: JSON.stringify({ name, email, password, password_confirmation: passwordConfirm })
         });
 
+        if (!response.success) {
+            showNotification(response.message, 'error');
+            return;
+        }
+
         authToken = response.data.token;
         currentUser = response.data.user;
         
@@ -139,6 +150,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         showNotification('¡Cuenta creada correctamente!');
         closeModal('register');
         updateUIAfterAuth();
+        location.reload();
         
     } catch (error) {
         showNotification('Error en el registro: ' + error.message, 'error');
