@@ -1,7 +1,25 @@
-// Configuración base de la API
-const API_BASE_URL = 'http://localhost:8000/api';
-let authToken = localStorage.getItem('authToken');
-let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+// ============= CARGAR CAMBIOS DE MONEDA =============
+let exchangeRates = {};
+
+async function loadExchangeRates() {
+    try {
+        const response = await fetchAPI('/exchange-rates');
+        const rates = response.data;
+        
+        rates.forEach(rate => {
+            exchangeRates[rate.to_currency] = rate.rate;
+        });
+        
+        console.log('Tasas de cambio cargadas:', exchangeRates);
+    } catch (error) {
+        console.error('Error al cargar tasas de cambio:', error);
+    }
+}
+
+function convertCurrency(amount, toCurrency = 'PEN') {
+    if (!exchangeRates[toCurrency]) return amount;
+    return (amount * exchangeRates[toCurrency]).toFixed(2);
+}
 
 // ============= UTILIDADES =============
 function openModal(modalId) {
@@ -210,6 +228,7 @@ async function showCourseDetail(course) {
     openModal('courseDetail');
     
     const contentDiv = document.getElementById('courseDetailContent');
+    const precioConvertido = convertCurrency(course.price, 'PEN');
     
     const isFavorited = currentUser ? true : false; // Verificar después
     const isEnrolled = currentUser ? true : false; // Verificar después
@@ -247,8 +266,30 @@ async function showCourseDetail(course) {
                 <p class="text-gray-700 whitespace-pre-wrap">${course.syllabus}</p>
             </div>
 
+            <!-- Sección de Comentarios -->
+            <div class="border-t pt-4">
+                <h3 class="font-bold text-secondary mb-4">Comentarios (${course.comments_count || 0})</h3>
+                <div id="commentsList" class="space-y-3 mb-4 max-h-48 overflow-y-auto">
+                    <!-- Los comentarios se cargarán aquí -->
+                </div>
+                
+                ${currentUser ? `
+                    <form id="commentForm" class="space-y-2">
+                        <textarea id="commentText" placeholder="Escribe tu comentario (máx 200 caracteres)..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary text-sm" maxlength="200" required></textarea>
+                        <button type="submit" onclick="submitComment(event, ${course.id})" class="px-4 py-2 bg-accent text-secondary rounded text-sm font-bold hover:bg-opacity-90 transition">
+                            Comentar
+                        </button>
+                    </form>
+                ` : `
+                    <p class="text-gray-600 text-sm">Inicia sesión para comentar</p>
+                `}
+            </div>
+
             <div class="border-t pt-4 flex justify-between items-center">
-                <span class="text-3xl font-bold text-accent">S/. ${course.price}</span>
+                <div>
+                    <span class="text-3xl font-bold text-accent">S/. ${course.price}</span>
+                    <p class="text-xs text-gray-600">≈ ${precioConvertido} PEN</p>
+                </div>
                 <div class="space-x-2">
                     ${currentUser ? `
                         <button class="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90" onclick="enrollCourse(${course.id})">
@@ -266,6 +307,45 @@ async function showCourseDetail(course) {
             </div>
         </div>
     `;
+    
+    // Cargar comentarios
+    loadComments(course.id);
+}
+
+async function loadComments(courseId) {
+    try {
+        const response = await fetchAPI(`/comments/${courseId}`);
+        const comments = response.data;
+        
+        const container = document.getElementById('commentsList');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (comments.length === 0) {
+            container.innerHTML = '<p class="text-gray-600 text-sm">No hay comentarios aún. ¡Sé el primero!</p>';
+            return;
+        }
+        
+        comments.forEach(comment => {
+            const commentDiv = document.createElement('div');
+            commentDiv.className = 'bg-gray-50 p-3 rounded text-sm';
+            commentDiv.innerHTML = `
+                <div class="flex justify-between">
+                    <p class="font-bold text-secondary">${comment.user.name}</p>
+                    ${currentUser && (currentUser.id === comment.user_id || currentUser.role === 'admin') ? `
+                        <button onclick="deleteComment(${comment.id})" class="text-red-600 hover:underline text-xs">
+                            Eliminar
+                        </button>
+                    ` : ''}
+                </div>
+                <p class="text-gray-700">${comment.content}</p>
+            `;
+            container.appendChild(commentDiv);
+        });
+    } catch (error) {
+        console.error('Error al cargar comentarios:', error);
+    }
 }
 
 // ============= ACCIONES DE USUARIO =============
@@ -305,6 +385,50 @@ async function toggleFavorite(courseId) {
         
     } catch (error) {
         showNotification('Error al agregar favorito: ' + error.message, 'error');
+    }
+}
+
+async function submitComment(event, courseId) {
+    event.preventDefault();
+    
+    if (!authToken) {
+        showNotification('Debes iniciar sesión primero', 'error');
+        return;
+    }
+
+    const content = document.getElementById('commentText').value;
+
+    try {
+        await fetchAPI('/comments', {
+            method: 'POST',
+            body: JSON.stringify({ course_id: courseId, content })
+        });
+
+        document.getElementById('commentText').value = '';
+        showNotification('Comentario agregado correctamente');
+        loadComments(courseId);
+        
+    } catch (error) {
+        showNotification('Error al agregar comentario: ' + error.message, 'error');
+    }
+}
+
+async function deleteComment(commentId) {
+    if (!confirm('¿Deseas eliminar este comentario?')) {
+        return;
+    }
+
+    try {
+        await fetchAPI(`/comments/${commentId}`, {
+            method: 'DELETE'
+        });
+
+        showNotification('Comentario eliminado');
+        // Recargar comentarios del curso actual
+        // Aquí sería ideal pasar el courseId, pero por ahora recargamos el modal
+        
+    } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
     }
 }
 
@@ -378,5 +502,6 @@ async function logout() {
 document.addEventListener('DOMContentLoaded', () => {
     updateUIAfterAuth();
     loadCategories();
+    loadExchangeRates();
     loadCourses();
 });
