@@ -102,7 +102,7 @@ async function loadCategorias() {
 async function loadMisCursos() {
     try {
         const response = await fetchAPI('/courses');
-        const cursos = response.data;
+        const cursos = (response.data && response.data.data) || response.data || [];
 
         const container = document.getElementById('misCursosContainer');
         container.innerHTML = '';

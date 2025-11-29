@@ -86,7 +86,7 @@ function switchTab(tabName) {
 async function loadInscripciones() {
     try {
         const response = await fetchAPI('/enrollments');
-        const inscripciones = response.data;
+        const inscripciones = (response.data && response.data.data) || response.data || [];
 
         const container = document.getElementById('inscripcionesContainer');
         container.innerHTML = '';
@@ -142,7 +142,7 @@ async function loadInscripciones() {
 async function loadFavoritos() {
     try {
         const response = await fetchAPI('/favorites');
-        const favoritos = response.data;
+        const favoritos = (response.data && response.data.data) || response.data || [];
 
         const container = document.getElementById('favoritosContainer');
         container.innerHTML = '';

@@ -9,7 +9,7 @@ let exchangeRates = {};
 async function loadExchangeRates() {
     try {
         const response = await fetchAPI('/exchange-rates');
-        const rates = response.data;
+        const rates = response.rates || response.data;
         
         rates.forEach(rate => {
             exchangeRates[rate.to_currency] = rate.rate;
@@ -164,7 +164,7 @@ async function loadCourses(filters = {}) {
         }
 
         const response = await fetchAPI(url);
-        const courses = response.data;
+        const courses = response.data.data || response.data;
 
         const container = document.getElementById('cursosContainer');
         container.innerHTML = '';
@@ -196,6 +196,7 @@ async function loadCourses(filters = {}) {
         });
 
     } catch (error) {
+        console.error('Error al cargar cursos:', error);
         showNotification('Error al cargar cursos: ' + error.message, 'error');
     }
 }
@@ -204,7 +205,7 @@ async function loadCourses(filters = {}) {
 async function loadCategories() {
     try {
         const response = await fetchAPI('/categories');
-        const categories = response.data;
+        const categories = response.data || [];
 
         const select = document.getElementById('categoryFilter');
         categories.forEach(category => {
@@ -320,7 +321,7 @@ async function showCourseDetail(course) {
 async function loadComments(courseId) {
     try {
         const response = await fetchAPI(`/comments/${courseId}`);
-        const comments = response.data;
+        const comments = (response.data && response.data.data) || response.data || [];
         
         const container = document.getElementById('commentsList');
         if (!container) return;

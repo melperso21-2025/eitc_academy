@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug - EITC Academy</title>
+    <script>
+        const API_BASE_URL = 'http://localhost:8000/api';
+        let authToken = localStorage.getItem('authToken') || null;
+        let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+        // Función para hacer solicitudes a la API
+        async function fetchAPI(endpoint, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            // Agregar token de autenticación si existe
+            if (authToken) {
+                defaultOptions.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const finalOptions = { ...defaultOptions, ...options };
+            
+            try {
+                console.log(`Fetching: ${API_BASE_URL}${endpoint}`);
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, finalOptions);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || `Error ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Response:', data);
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        async function testAPI() {
+            try {
+                console.log('=== TESTING COURSES ===');
+                const courses = await fetchAPI('/courses');
+                console.log('Cursos recibidos:', courses);
+                document.getElementById('result').innerHTML = `<pre>${JSON.stringify(courses, null, 2)}</pre>`;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `<p style="color:red">Error: ${error.message}</p>`;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Página cargada, iniciando test...');
+            testAPI();
+        });
+    </script>
+</head>
+<body>
+    <h1>Debug API Test</h1>
+    <button onclick="testAPI()">Recargar Prueba</button>
+    <div id="result">Cargando...</div>
+</body>
+</html>
