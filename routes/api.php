@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\EnrollmentController;
+use App\Http\Controllers\Api\ImageUploadController;
 
 // Rutas públicas (sin autenticación)
 Route::prefix('api')->group(function () {
@@ -31,6 +32,9 @@ Route::prefix('api')->group(function () {
     Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
     Route::get('/exchange-rates/{currency}', [ExchangeRateController::class, 'show']);
     Route::get('/exchange-rates/convert', [ExchangeRateController::class, 'convert']);
+
+    // Upload genérico (público)
+    Route::post('/upload-image', [ImageUploadController::class, 'uploadImage']);
 });
 
 // Rutas que requieren autenticación (Sanctum)
@@ -43,6 +47,7 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function () {
     Route::post('/courses', [CourseController::class, 'store']);
     Route::put('/courses/{course}', [CourseController::class, 'update']);
     Route::delete('/courses/{course}', [CourseController::class, 'destroy']);
+    Route::post('/courses/{course}/upload-image', [ImageUploadController::class, 'uploadCourseImage']);
 
     // Categorías (solo admin)
     Route::post('/categories', [CategoryController::class, 'store']);
