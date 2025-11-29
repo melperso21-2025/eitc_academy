@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extraer URLs Firebase - EITC Academy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-storage.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-4xl mx-auto p-8">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">🔗 Extraer URLs de Firebase Storage</h1>
+        <p class="text-gray-600 mb-8">Obtén automáticamente las URLs públicas de todas tus imágenes</p>
+
+        <div class="bg-white rounded-lg shadow p-6 space-y-6">
+            
+            <!-- Configuración Firebase -->
+            <div class="border-t pt-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">1️⃣ Configuración de Firebase</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-bold mb-1">Project ID</label>
+                        <input type="text" id="projectId" placeholder="ej: eitc-academy" class="w-full px-4 py-2 border border-gray-300 rounded">
+                    </div>
+                    <p class="text-xs text-gray-600">
+                        Encuéntralo en: Firebase Console → Configuración del proyecto → ID del proyecto
+                    </p>
+                </div>
+            </div>
+
+            <!-- Carpeta en Storage -->
+            <div class="border-t pt-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">2️⃣ Información de las Imágenes</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-bold mb-1">Nombres de las imágenes (uno por línea)</label>
+                        <textarea id="imageNames" placeholder="blf_tangente_delta_descargas.jpg&#10;drones.png&#10;pixeles-energias..." class="w-full px-4 py-2 border border-gray-300 rounded h-40 font-mono text-sm">blf_tangente_delta_descargas.jpg
+drones.png
+pixeles-energias-epic-com-2741-175039.jpg
+pixeles-farig-nt-3496920.jpg
+pixeles-kindel-media-98890.jpg
+proteccion_el_ectricas.jpg
+puesta_a_tierra.jpg
+termografia.jpg
+thermo.png</textarea>
+                    </div>
+                    <p class="text-xs text-gray-600">
+                        Copia los nombres exactos desde Firebase Storage (incluye extensión)
+                    </p>
+                </div>
+            </div>
+
+            <!-- Generar URLs -->
+            <div class="border-t pt-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">3️⃣ Generar URLs</h3>
+                <button id="generateBtn" class="w-full bg-blue-600 text-white px-6 py-3 rounded font-bold hover:bg-blue-700 transition">
+                    Generar URLs
+                </button>
+            </div>
+
+            <!-- Resultados -->
+            <div id="results" class="hidden border-t pt-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">✅ URLs Generadas</h3>
+                
+                <div class="space-y-2">
+                    <label class="block text-sm font-bold">Para copiar/pegar (formato curso|url):</label>
+                    <textarea id="urlsFormatted" readonly class="w-full px-4 py-2 border border-gray-300 rounded h-40 font-mono text-xs bg-gray-50" onclick="this.select()"></textarea>
+                    <button onclick="document.getElementById('urlsFormatted').select(); document.execCommand('copy'); alert('¡Copiado!');" class="text-sm bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700">
+                        Copiar Formato SQL
+                    </button>
+                </div>
+
+                <div class="mt-6 space-y-2">
+                    <label class="block text-sm font-bold">Para actualizar en el panel web:</label>
+                    <div id="urlsList" class="space-y-2">
+                        <!-- Se llenarán las URLs aquí -->
+                    </div>
+                </div>
+
+                <div class="mt-6 bg-yellow-50 border-l-4 border-yellow-500 p-4">
+                    <h4 class="font-bold text-yellow-800 mb-2">⚠️ Próximo paso:</h4>
+                    <ol class="text-sm text-yellow-800 list-decimal list-inside space-y-1">
+                        <li>Copia una URL del listado de abajo</li>
+                        <li>Ve a: <code class="bg-yellow-100 px-1 rounded">http://localhost:8000/update-images.html</code></li>
+                        <li>Pega la URL, selecciona curso, y haz click "Actualizar"</li>
+                        <li>Repite para cada imagen</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Info Firebase Almacenamiento -->
+            <div class="border-t pt-6 bg-blue-50 p-4 rounded">
+                <h4 class="font-bold text-blue-900 mb-2">📍 ¿Cómo obtener Project ID?</h4>
+                <ol class="text-sm text-blue-800 list-decimal list-inside space-y-1">
+                    <li>Ve a <a href="https://console.firebase.google.com" target="_blank" class="underline">Firebase Console</a></li>
+                    <li>Selecciona tu proyecto "eitc-academy"</li>
+                    <li>Click en el icono de engranaje (⚙️) → Configuración del proyecto</li>
+                    <li>Copia el "ID del proyecto"</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('generateBtn').addEventListener('click', generateURLs);
+
+        function generateURLs() {
+            const projectId = document.getElementById('projectId').value.trim();
+            const imageNames = document.getElementById('imageNames').value
+                .split('\n')
+                .map(name => name.trim())
+                .filter(name => name.length > 0);
+
+            if (!projectId) {
+                alert('Por favor ingresa el Project ID de Firebase');
+                return;
+            }
+
+            if (imageNames.length === 0) {
+                alert('Por favor ingresa al menos un nombre de imagen');
+                return;
+            }
+
+            // Mapeo manual de cursos a imágenes (basado en nombres)
+            const courseMapping = {
+                'blf_tangente_delta_descargas.jpg': { id: 2, name: 'Pruebas Eléctricas' },
+                'drones.png': { id: 8, name: 'Drones para Inspección' },
+                'pixeles-energias-epic-com-2741-175039.jpg': { id: 11, name: 'ArcGIS' },
+                'pixeles-farig-nt-3496920.jpg': { id: 12, name: 'Análisis de Costos' },
+                'pixeles-kindel-media-98890.jpg': { id: 13, name: 'ARES' },
+                'proteccion_el_ectricas.jpg': { id: 5, name: 'Protecciones Eléctricas' },
+                'puesta_a_tierra.jpg': { id: 4, name: 'Puesta a Tierra' },
+                'termografia.jpg': { id: 1, name: 'Termografía' },
+                'thermo.png': { id: 10, name: 'Calderas' }
+            };
+
+            const urls = [];
+            const urlsList = [];
+
+            imageNames.forEach((name, index) => {
+                const bucketUrl = `https://firebasestorage.googleapis.com/v0/b/${projectId}.appspot.com/o/courses%2F${encodeURIComponent(name)}?alt=media`;
+                const courseInfo = courseMapping[name] || { id: index + 1, name: 'Curso ' + (index + 1) };
+                
+                urls.push(`${courseInfo.id}|${bucketUrl}`);
+                urlsList.push({
+                    id: courseInfo.id,
+                    name: courseInfo.name,
+                    image: name,
+                    url: bucketUrl
+                });
+            });
+
+            // Mostrar resultados
+            document.getElementById('results').classList.remove('hidden');
+            document.getElementById('urlsFormatted').value = urls.join('\n');
+
+            const listHtml = urlsList.map(item => `
+                <div class="bg-gray-50 p-3 rounded border border-gray-300">
+                    <p class="text-sm font-bold text-gray-800">Curso ${item.id}: ${item.name}</p>
+                    <p class="text-xs text-gray-600 mb-2">Imagen: ${item.image}</p>
+                    <div class="flex items-center gap-2">
+                        <input type="text" value="${item.url}" readonly class="flex-1 text-xs px-2 py-1 border border-gray-300 rounded bg-white font-mono">
+                        <button onclick="this.previousElementSibling.select(); document.execCommand('copy'); this.textContent = '¡Copiado!'; setTimeout(() => this.textContent = 'Copiar', 2000);" class="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 whitespace-nowrap">
+                            Copiar
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('urlsList').innerHTML = listHtml;
+
+            // Scroll a resultados
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Pre-llenar si es necesario
+        window.addEventListener('DOMContentLoaded', () => {
+            // Puedes agregar lógica aquí si es necesario
+        });
+    </script>
+</body>
+</html>
