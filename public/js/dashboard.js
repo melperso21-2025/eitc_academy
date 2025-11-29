@@ -109,9 +109,11 @@ async function loadInscripciones() {
             card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer overflow-hidden';
             card.onclick = () => showCourseDetail(course);
             
+            const imageUrl = course.image_url ? (course.image_url.includes('?') ? course.image_url + '&t=' + Date.now() : course.image_url + '?t=' + Date.now()) : '';
+            
             card.innerHTML = `
                 <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
-                    ${course.image_url ? `<img src="${course.image_url}" alt="${course.name}" class="w-full h-full object-cover">` : `<span class="text-white text-4xl">📚</span>`}
+                    ${imageUrl ? `<img src="${imageUrl}" alt="${course.name}" class="w-full h-full object-cover" loading="lazy">` : `<span class="text-white text-4xl">📚</span>`}
                 </div>
                 <div class="p-4">
                     <h3 class="font-bold text-lg text-secondary mb-2">${course.name}</h3>
@@ -165,9 +167,11 @@ async function loadFavoritos() {
             card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer overflow-hidden';
             card.onclick = () => showCourseDetail(course);
             
+            const imageUrl = course.image_url ? (course.image_url.includes('?') ? course.image_url + '&t=' + Date.now() : course.image_url + '?t=' + Date.now()) : '';
+            
             card.innerHTML = `
                 <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
-                    ${course.image_url ? `<img src="${course.image_url}" alt="${course.name}" class="w-full h-full object-cover">` : `<span class="text-white text-4xl">⭐</span>`}
+                    ${imageUrl ? `<img src="${imageUrl}" alt="${course.name}" class="w-full h-full object-cover" loading="lazy">` : `<span class="text-white text-4xl">⭐</span>`}
                 </div>
                 <div class="p-4">
                     <h3 class="font-bold text-lg text-secondary mb-2">${course.name}</h3>

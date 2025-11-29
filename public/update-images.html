@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Actualizar Imágenes Firebase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-2xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">Actualizar Imágenes de Cursos - Firebase</h1>
+        
+        <div class="bg-white rounded-lg shadow p-6 space-y-6">
+            
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4">
+                <h3 class="font-bold text-blue-900 mb-2">📋 Instrucciones</h3>
+                <ol class="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                    <li>Copia la URL completa de Firebase Storage (con ?alt=media&token=...)</li>
+                    <li>Pega la URL y selecciona el curso</li>
+                    <li>Haz click en "Actualizar"</li>
+                    <li>Presiona Ctrl+F5 en la web para limpiar caché</li>
+                </ol>
+            </div>
+
+            <form id="updateForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold mb-2">URL de la Imagen (Firebase)</label>
+                    <input type="url" id="imageUrl" placeholder="https://firebasestorage.googleapis.com/..." class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500" required>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold mb-2">Selecciona el Curso</label>
+                    <select id="courseSelect" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500" required>
+                        <option value="">-- Cargando cursos --</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700">
+                    Actualizar Imagen
+                </button>
+            </form>
+
+            <div id="result" class="hidden bg-green-50 border-l-4 border-green-500 p-4">
+                <p id="resultText" class="text-green-800"></p>
+            </div>
+
+            <div id="error" class="hidden bg-red-50 border-l-4 border-red-500 p-4">
+                <p id="errorText" class="text-red-800"></p>
+            </div>
+
+            <hr>
+
+            <div>
+                <h3 class="font-bold text-gray-800 mb-4">📸 Galería de Cursos Actuales</h3>
+                <div id="courseGallery" class="grid grid-cols-2 gap-4">
+                    <!-- Se cargarán aquí los cursos -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000/api';
+        let authToken = localStorage.getItem('authToken');
+        let courses = [];
+
+        async function fetchAPI(endpoint, options = {}) {
+            const defaultOptions = {
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (authToken) {
+                defaultOptions.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            const finalOptions = { ...defaultOptions, ...options };
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, finalOptions);
+            return await response.json();
+        }
+
+        async function loadCourses() {
+            try {
+                const response = await fetchAPI('/courses?per_page=100');
+                courses = (response.data && response.data.data) || response.data || [];
+                
+                const select = document.getElementById('courseSelect');
+                select.innerHTML = '<option value="">-- Selecciona un curso --</option>';
+                courses.forEach(course => {
+                    const option = document.createElement('option');
+                    option.value = course.id;
+                    option.textContent = `${course.id}. ${course.name}`;
+                    select.appendChild(option);
+                });
+
+                displayGallery();
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function displayGallery() {
+            const gallery = document.getElementById('courseGallery');
+            gallery.innerHTML = courses.map(course => `
+                <div class="bg-white rounded shadow overflow-hidden">
+                    <div class="h-32 bg-gray-200 flex items-center justify-center">
+                        ${course.image_url ? 
+                            `<img src="${course.image_url}?t=${Date.now()}" alt="${course.name}" class="w-full h-full object-cover">` : 
+                            '<span class="text-3xl">📚</span>'
+                        }
+                    </div>
+                    <div class="p-3">
+                        <p class="text-xs font-bold text-gray-800 truncate">${course.name}</p>
+                        <p class="text-xs text-gray-600 truncate">
+                            ${course.image_url ? 
+                                course.image_url.substring(0, 40) + '...' : 
+                                'Sin imagen'
+                            }
+                        </p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('updateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const courseId = document.getElementById('courseSelect').value;
+            const imageUrl = document.getElementById('imageUrl').value;
+            
+            try {
+                const response = await fetchAPI(`/courses/${courseId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ image_url: imageUrl })
+                });
+
+                if (response.success) {
+                    document.getElementById('resultText').textContent = 
+                        `✅ Imagen actualizada para "${response.data.name}". Presiona Ctrl+F5 en la web para ver los cambios.`;
+                    document.getElementById('result').classList.remove('hidden');
+                    document.getElementById('error').classList.add('hidden');
+                    document.getElementById('imageUrl').value = '';
+                    document.getElementById('courseSelect').value = '';
+                    
+                    // Recargar galería
+                    setTimeout(loadCourses, 1500);
+                } else {
+                    throw new Error(response.message);
+                }
+            } catch (error) {
+                document.getElementById('errorText').textContent = '❌ Error: ' + error.message;
+                document.getElementById('error').classList.remove('hidden');
+                document.getElementById('result').classList.add('hidden');
+            }
+        });
+
+        // Cargar cursos al iniciar
+        window.addEventListener('DOMContentLoaded', loadCourses);
+    </script>
+</body>
+</html>
