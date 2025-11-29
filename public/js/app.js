@@ -314,10 +314,42 @@ function updateUIAfterAuth() {
         const btnLogin = document.getElementById('btnLogin');
         const btnRegister = document.getElementById('btnRegister');
         
-        btnLogin.textContent = `${currentUser.name} (Logout)`;
-        btnLogin.onclick = logout;
+        let texto = `${currentUser.name}`;
+        if (currentUser.role === 'admin') {
+            texto += ' (Admin)';
+        }
+        
+        btnLogin.textContent = texto;
+        btnLogin.onclick = () => {
+            if (currentUser.role === 'admin') {
+                // Mostrar opciones
+                showLogoutMenu();
+            } else {
+                logout();
+            }
+        };
         btnRegister.style.display = 'none';
     }
+}
+
+function showLogoutMenu() {
+    const menu = document.createElement('div');
+    menu.className = 'fixed top-16 right-4 bg-white shadow-lg rounded-lg overflow-hidden z-50';
+    menu.innerHTML = `
+        <a href="/admin.html" class="block px-4 py-2 text-secondary hover:bg-gray-100 transition">Panel Admin</a>
+        <button onclick="logout()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 transition">Cerrar Sesión</button>
+    `;
+    document.body.appendChild(menu);
+    
+    // Cerrar menú al hacer clic fuera
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target) && e.target !== document.getElementById('btnLogin')) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }, 100);
 }
 
 async function logout() {
