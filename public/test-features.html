@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Features - EITC Academy</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+        .test { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #003A5D; }
+        .success { border-left-color: #0BBF78; color: green; }
+        .error { border-left-color: #e74c3c; color: red; }
+        .pending { border-left-color: #f39c12; color: orange; }
+        pre { background: #222; color: #0f0; padding: 10px; overflow-x: auto; max-height: 200px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🧪 EITC Academy - Test de Funcionalidades</h1>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000/api';
+        let authToken = null;
+        let currentUser = null;
+        let testResults = [];
+
+        async function fetchAPI(endpoint, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (authToken) {
+                defaultOptions.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const finalOptions = { ...defaultOptions, ...options };
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, finalOptions);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || `Error ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        function logTest(name, success, data = '') {
+            testResults.push({name, success, data});
+            const statusClass = success ? 'success' : 'error';
+            const statusText = success ? '✅ PASS' : '❌ FAIL';
+            document.getElementById('results').innerHTML += `
+                <div class="test ${statusClass}">
+                    <strong>${statusText}</strong> - ${name}
+                    ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ''}
+                </div>
+            `;
+        }
+
+        async function testCourses() {
+            try {
+                const response = await fetchAPI('/courses');
+                const courses = response.data.data || response.data || [];
+                logTest('GET /courses - Listar cursos', courses.length > 0, {count: courses.length, first: courses[0]?.name});
+            } catch (error) {
+                logTest('GET /courses - Listar cursos', false, error.message);
+            }
+        }
+
+        async function testCategories() {
+            try {
+                const response = await fetchAPI('/categories');
+                const categories = response.data || [];
+                logTest('GET /categories - Listar categorías', categories.length > 0, {count: categories.length});
+            } catch (error) {
+                logTest('GET /categories - Listar categorías', false, error.message);
+            }
+        }
+
+        async function testRegister() {
+            try {
+                const response = await fetchAPI('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: 'Test User',
+                        email: 'test' + Date.now() + '@example.com',
+                        password: 'password123',
+                        password_confirmation: 'password123'
+                    })
+                });
+                authToken = response.data.token;
+                currentUser = response.data.user;
+                logTest('POST /auth/register - Registrar usuario', response.success, response.data);
+            } catch (error) {
+                logTest('POST /auth/register - Registrar usuario', false, error.message);
+            }
+        }
+
+        async function testLogin() {
+            try {
+                const response = await fetchAPI('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        email: 'admin@eitcacademy.com',
+                        password: 'password123'
+                    })
+                });
+                authToken = response.data.token;
+                currentUser = response.data.user;
+                logTest('POST /auth/login - Login admin', response.success, {user: currentUser.email, role: currentUser.role});
+            } catch (error) {
+                logTest('POST /auth/login - Login admin', false, error.message);
+            }
+        }
+
+        async function testGetMe() {
+            try {
+                const response = await fetchAPI('/auth/me');
+                logTest('GET /auth/me - Obtener usuario actual', response.data.id === currentUser.id, response.data);
+            } catch (error) {
+                logTest('GET /auth/me - Obtener usuario actual', false, error.message);
+            }
+        }
+
+        async function testEnrollments() {
+            try {
+                const response = await fetchAPI('/enrollments');
+                const enrollments = response.data.data || response.data || [];
+                logTest('GET /enrollments - Listar inscripciones', true, {count: enrollments.length});
+            } catch (error) {
+                logTest('GET /enrollments - Listar inscripciones', false, error.message);
+            }
+        }
+
+        async function testFavorites() {
+            try {
+                const response = await fetchAPI('/favorites');
+                const favorites = response.data.data || response.data || [];
+                logTest('GET /favorites - Listar favoritos', true, {count: favorites.length});
+            } catch (error) {
+                logTest('GET /favorites - Listar favoritos', false, error.message);
+            }
+        }
+
+        async function testAddFavorite() {
+            try {
+                const response = await fetchAPI('/favorites', {
+                    method: 'POST',
+                    body: JSON.stringify({course_id: 1})
+                });
+                logTest('POST /favorites - Agregar a favoritos', response.success, response.message);
+            } catch (error) {
+                logTest('POST /favorites - Agregar a favoritos', false, error.message);
+            }
+        }
+
+        async function testEnroll() {
+            try {
+                const response = await fetchAPI('/enrollments', {
+                    method: 'POST',
+                    body: JSON.stringify({course_id: 1})
+                });
+                logTest('POST /enrollments - Inscribirse en curso', response.success, response.message);
+            } catch (error) {
+                logTest('POST /enrollments - Inscribirse en curso', false, error.message);
+            }
+        }
+
+        async function testComment() {
+            try {
+                const response = await fetchAPI('/comments', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        course_id: 1,
+                        content: 'Este es un comentario de prueba!'
+                    })
+                });
+                logTest('POST /comments - Crear comentario', response.success, response.message);
+            } catch (error) {
+                logTest('POST /comments - Crear comentario', false, error.message);
+            }
+        }
+
+        async function testExchangeRates() {
+            try {
+                const response = await fetchAPI('/exchange-rates');
+                const rates = response.rates || response.data || [];
+                logTest('GET /exchange-rates - Obtener tasas de cambio', rates.length > 0, {count: rates.length});
+            } catch (error) {
+                logTest('GET /exchange-rates - Obtener tasas de cambio', false, error.message);
+            }
+        }
+
+        async function runAllTests() {
+            document.getElementById('results').innerHTML = '<h2>Ejecutando tests...</h2>';
+            testResults = [];
+
+            // Pruebas públicas
+            await testCourses();
+            await testCategories();
+            await testExchangeRates();
+
+            // Tests de autenticación
+            await testRegister();
+            await testGetMe();
+            await testLogin();
+            await testGetMe();
+
+            // Tests de funcionalidades autenticadas
+            await testEnrollments();
+            await testFavorites();
+            await testAddFavorite();
+            await testEnroll();
+            await testComment();
+
+            // Resumen
+            const passed = testResults.filter(r => r.success).length;
+            const total = testResults.length;
+            document.getElementById('results').innerHTML += `
+                <div class="test ${passed === total ? 'success' : 'error'}">
+                    <h3>📊 RESUMEN: ${passed}/${total} tests pasaron</h3>
+                </div>
+            `;
+        }
+
+        window.addEventListener('DOMContentLoaded', runAllTests);
+    </script>
+</body>
+</html>
