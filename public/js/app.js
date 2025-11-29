@@ -1,0 +1,344 @@
+// Configuración base de la API
+const API_BASE_URL = 'http://localhost:8000/api';
+let authToken = localStorage.getItem('authToken');
+let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+// ============= UTILIDADES =============
+function openModal(modalId) {
+    document.getElementById(modalId + 'Modal').classList.remove('hidden');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId + 'Modal').classList.add('hidden');
+}
+
+function switchModal(fromModal, toModal) {
+    closeModal(fromModal);
+    openModal(toModal);
+}
+
+// Función para mostrar notificaciones
+function showNotification(message, type = 'success') {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    alert(message); // Usar alert por ahora, después mejorar
+}
+
+// Función para hacer solicitudes a la API
+async function fetchAPI(endpoint, options = {}) {
+    const defaultOptions = {
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    };
+
+    // Agregar token de autenticación si existe
+    if (authToken) {
+        defaultOptions.headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const finalOptions = { ...defaultOptions, ...options };
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, finalOptions);
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                // Token inválido o expirado
+                authToken = null;
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('currentUser');
+                location.reload();
+            }
+            const error = await response.json();
+            throw new Error(error.message || `Error ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+    }
+}
+
+// ============= AUTENTICACIÓN =============
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+        const response = await fetchAPI('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password })
+        });
+
+        authToken = response.data.token;
+        currentUser = response.data.user;
+        
+        localStorage.setItem('authToken', authToken);
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+        showNotification('¡Sesión iniciada correctamente!');
+        closeModal('login');
+        updateUIAfterAuth();
+        
+    } catch (error) {
+        showNotification('Error en el login: ' + error.message, 'error');
+    }
+});
+
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('registerName').value;
+    const email = document.getElementById('registerEmail').value;
+    const password = document.getElementById('registerPassword').value;
+    const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+
+    if (password !== passwordConfirm) {
+        showNotification('Las contraseñas no coinciden', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetchAPI('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ name, email, password, password_confirmation: passwordConfirm })
+        });
+
+        authToken = response.data.token;
+        currentUser = response.data.user;
+        
+        localStorage.setItem('authToken', authToken);
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+        showNotification('¡Cuenta creada correctamente!');
+        closeModal('register');
+        updateUIAfterAuth();
+        
+    } catch (error) {
+        showNotification('Error en el registro: ' + error.message, 'error');
+    }
+});
+
+// Botones de login/register
+document.getElementById('btnLogin').addEventListener('click', () => openModal('login'));
+document.getElementById('btnRegister').addEventListener('click', () => openModal('register'));
+
+// ============= CARGAR CURSOS =============
+async function loadCourses(filters = {}) {
+    try {
+        let url = '/courses';
+        const params = new URLSearchParams();
+
+        if (filters.search) params.append('search', filters.search);
+        if (filters.category) params.append('category', filters.category);
+        if (filters.level) params.append('level', filters.level);
+
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+
+        const response = await fetchAPI(url);
+        const courses = response.data;
+
+        const container = document.getElementById('cursosContainer');
+        container.innerHTML = '';
+
+        if (courses.length === 0) {
+            container.innerHTML = '<p class="col-span-3 text-center text-gray-600">No se encontraron cursos.</p>';
+            return;
+        }
+
+        courses.forEach(course => {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer overflow-hidden';
+            card.onclick = () => showCourseDetail(course);
+            
+            card.innerHTML = `
+                <div class="h-48 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center">
+                    <span class="text-white text-4xl">📚</span>
+                </div>
+                <div class="p-4">
+                    <h3 class="font-bold text-lg text-secondary mb-2">${course.name}</h3>
+                    <p class="text-gray-600 text-sm mb-3 line-clamp-2">${course.description}</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-accent font-bold text-lg">S/. ${course.price}</span>
+                        <span class="text-xs bg-primary text-white px-2 py-1 rounded">${course.level}</span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+    } catch (error) {
+        showNotification('Error al cargar cursos: ' + error.message, 'error');
+    }
+}
+
+// ============= CARGAR CATEGORÍAS =============
+async function loadCategories() {
+    try {
+        const response = await fetchAPI('/categories');
+        const categories = response.data;
+
+        const select = document.getElementById('categoryFilter');
+        categories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category.id;
+            option.textContent = category.name;
+            select.appendChild(option);
+        });
+
+    } catch (error) {
+        console.error('Error al cargar categorías:', error);
+    }
+}
+
+// ============= FILTRADO DE CURSOS =============
+document.getElementById('btnFilter').addEventListener('click', () => {
+    const search = document.getElementById('searchFilter').value;
+    const category = document.getElementById('categoryFilter').value;
+    const level = document.getElementById('levelFilter').value;
+
+    loadCourses({ search, category, level });
+});
+
+// ============= DETALLE DEL CURSO =============
+async function showCourseDetail(course) {
+    openModal('courseDetail');
+    
+    const contentDiv = document.getElementById('courseDetailContent');
+    
+    const isFavorited = currentUser ? true : false; // Verificar después
+    const isEnrolled = currentUser ? true : false; // Verificar después
+
+    contentDiv.innerHTML = `
+        <div class="space-y-4">
+            <h2 class="text-3xl font-bold text-secondary">${course.name}</h2>
+            
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <p class="text-gray-600">Nivel</p>
+                    <p class="font-bold text-primary">${course.level}</p>
+                </div>
+                <div>
+                    <p class="text-gray-600">Modalidad</p>
+                    <p class="font-bold text-primary">${course.modality}</p>
+                </div>
+                <div>
+                    <p class="text-gray-600">Duración</p>
+                    <p class="font-bold text-primary">${course.duration_hours} horas</p>
+                </div>
+                <div>
+                    <p class="text-gray-600">Certificado</p>
+                    <p class="font-bold text-primary">${course.certificate ? 'Sí' : 'No'}</p>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-secondary mb-2">Descripción</h3>
+                <p class="text-gray-700">${course.description}</p>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-secondary mb-2">Syllabus</h3>
+                <p class="text-gray-700 whitespace-pre-wrap">${course.syllabus}</p>
+            </div>
+
+            <div class="border-t pt-4 flex justify-between items-center">
+                <span class="text-3xl font-bold text-accent">S/. ${course.price}</span>
+                <div class="space-x-2">
+                    ${currentUser ? `
+                        <button class="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90" onclick="enrollCourse(${course.id})">
+                            Inscribirse
+                        </button>
+                        <button class="px-4 py-2 bg-gray-300 text-secondary rounded hover:bg-gray-400" onclick="toggleFavorite(${course.id})">
+                            ❤️ Favorito
+                        </button>
+                    ` : `
+                        <button class="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90" onclick="openModal('login')">
+                            Inicia sesión para inscribirte
+                        </button>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ============= ACCIONES DE USUARIO =============
+async function enrollCourse(courseId) {
+    if (!authToken) {
+        showNotification('Debes iniciar sesión primero', 'error');
+        return;
+    }
+
+    try {
+        await fetchAPI('/enrollments', {
+            method: 'POST',
+            body: JSON.stringify({ course_id: courseId })
+        });
+
+        showNotification('¡Te has inscrito al curso correctamente!');
+        closeModal('courseDetail');
+        
+    } catch (error) {
+        showNotification('Error al inscribirse: ' + error.message, 'error');
+    }
+}
+
+async function toggleFavorite(courseId) {
+    if (!authToken) {
+        showNotification('Debes iniciar sesión primero', 'error');
+        return;
+    }
+
+    try {
+        await fetchAPI('/favorites', {
+            method: 'POST',
+            body: JSON.stringify({ course_id: courseId })
+        });
+
+        showNotification('Favorito agregado/removido correctamente');
+        
+    } catch (error) {
+        showNotification('Error al agregar favorito: ' + error.message, 'error');
+    }
+}
+
+// ============= ACTUALIZAR UI =============
+function updateUIAfterAuth() {
+    if (currentUser) {
+        const btnLogin = document.getElementById('btnLogin');
+        const btnRegister = document.getElementById('btnRegister');
+        
+        btnLogin.textContent = `${currentUser.name} (Logout)`;
+        btnLogin.onclick = logout;
+        btnRegister.style.display = 'none';
+    }
+}
+
+async function logout() {
+    try {
+        await fetchAPI('/auth/logout', {
+            method: 'POST'
+        });
+    } catch (error) {
+        console.error('Error en logout:', error);
+    }
+
+    authToken = null;
+    currentUser = null;
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
+    location.reload();
+}
+
+// ============= INICIALIZACIÓN =============
+document.addEventListener('DOMContentLoaded', () => {
+    updateUIAfterAuth();
+    loadCategories();
+    loadCourses();
+});

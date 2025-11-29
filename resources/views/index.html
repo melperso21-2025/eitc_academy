@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EITC Academy - Plataforma de Formación Industrial</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#003A5D',
+                        secondary: '#1A1A1A',
+                        accent: '#0BBF78',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navbar -->
+    <nav class="bg-primary text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 bg-accent rounded-lg"></div>
+                    <span class="font-bold text-xl">EITC Academy</span>
+                </div>
+                <div class="hidden md:flex space-x-6">
+                    <a href="#cursos" class="hover:text-accent transition">Cursos</a>
+                    <a href="#categorias" class="hover:text-accent transition">Categorías</a>
+                </div>
+                <div class="flex space-x-4">
+                    <button id="btnLogin" class="px-4 py-2 rounded hover:bg-opacity-80 transition">Iniciar Sesión</button>
+                    <button id="btnRegister" class="px-4 py-2 bg-accent text-secondary rounded hover:bg-opacity-90 transition">Registrarse</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="bg-gradient-to-r from-primary to-blue-900 text-white py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div class="flex flex-col justify-center">
+                    <h1 class="text-5xl font-bold mb-4">Formación Industrial de Calidad</h1>
+                    <p class="text-xl text-gray-200 mb-6">Aprende de expertos en energía eléctrica y procesos industriales con certificación internacional.</p>
+                    <button class="bg-accent text-secondary px-6 py-3 rounded font-bold hover:bg-opacity-90 transition w-fit">Explorar Cursos</button>
+                </div>
+                <div class="flex items-center justify-center">
+                    <div class="w-full h-80 bg-white bg-opacity-10 rounded-lg flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="text-6xl mb-4">⚡</div>
+                            <p class="text-lg">Educación Industrial Avanzada</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Sección de Cursos -->
+    <section id="cursos" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <h2 class="text-4xl font-bold text-secondary mb-4">Nuestros Cursos</h2>
+        <p class="text-gray-600 mb-8">Descubre una amplia variedad de cursos especializados en formación industrial.</p>
+
+        <!-- Filtros -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 bg-white p-6 rounded-lg shadow">
+            <input type="text" id="searchFilter" placeholder="Buscar cursos..." class="px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary">
+            
+            <select id="categoryFilter" class="px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary">
+                <option value="">Todas las categorías</option>
+            </select>
+
+            <select id="levelFilter" class="px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary">
+                <option value="">Todos los niveles</option>
+                <option value="basico">Básico</option>
+                <option value="intermedio">Intermedio</option>
+                <option value="avanzado">Avanzado</option>
+            </select>
+
+            <button id="btnFilter" class="bg-primary text-white px-4 py-2 rounded hover:bg-opacity-90 transition">Filtrar</button>
+        </div>
+
+        <!-- Grilla de cursos -->
+        <div id="cursosContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Los cursos se cargarán aquí con JavaScript -->
+        </div>
+    </section>
+
+    <!-- Modal de Login -->
+    <div id="loginModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full">
+            <h3 class="text-2xl font-bold text-secondary mb-6">Iniciar Sesión</h3>
+            <form id="loginForm" class="space-y-4">
+                <input type="email" id="loginEmail" placeholder="Correo electrónico" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="password" id="loginPassword" placeholder="Contraseña" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <button type="submit" class="w-full bg-primary text-white py-2 rounded hover:bg-opacity-90 transition font-bold">Iniciar Sesión</button>
+                <p class="text-center text-gray-600">¿No tienes cuenta? <button type="button" class="text-accent font-bold hover:underline" onclick="switchModal('login', 'register')">Regístrate aquí</button></p>
+            </form>
+            <button onclick="closeModal('login')" class="mt-4 w-full text-gray-600 hover:text-secondary">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Modal de Registro -->
+    <div id="registerModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full">
+            <h3 class="text-2xl font-bold text-secondary mb-6">Crear Cuenta</h3>
+            <form id="registerForm" class="space-y-4">
+                <input type="text" id="registerName" placeholder="Nombre completo" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="email" id="registerEmail" placeholder="Correo electrónico" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="password" id="registerPassword" placeholder="Contraseña" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="password" id="registerPasswordConfirm" placeholder="Confirmar contraseña" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <button type="submit" class="w-full bg-accent text-secondary py-2 rounded hover:bg-opacity-90 transition font-bold">Crear Cuenta</button>
+                <p class="text-center text-gray-600">¿Ya tienes cuenta? <button type="button" class="text-primary font-bold hover:underline" onclick="switchModal('register', 'login')">Inicia sesión aquí</button></p>
+            </form>
+            <button onclick="closeModal('register')" class="mt-4 w-full text-gray-600 hover:text-secondary">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Modal de Detalle de Curso -->
+    <div id="courseDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+        <div class="bg-white rounded-lg p-8 max-w-2xl w-full my-8">
+            <button onclick="closeModal('courseDetail')" class="text-gray-600 float-right text-2xl hover:text-secondary">&times;</button>
+            <div id="courseDetailContent">
+                <!-- Contenido dinámico del curso -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-secondary text-white py-12 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h4 class="text-lg font-bold mb-4">EITC Academy</h4>
+                    <p class="text-gray-400">Plataforma de formación especializada en energía eléctrica y procesos industriales.</p>
+                </div>
+                <div>
+                    <h4 class="text-lg font-bold mb-4">Enlaces Rápidos</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition">Cursos</a></li>
+                        <li><a href="#" class="hover:text-white transition">Categorías</a></li>
+                        <li><a href="#" class="hover:text-white transition">Contacto</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-bold mb-4">Contacto</h4>
+                    <p class="text-gray-400">Email: info@eitcacademy.com</p>
+                    <p class="text-gray-400">Teléfono: +51 999 999 999</p>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
+                <p>&copy; 2025 EITC Academy. Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
