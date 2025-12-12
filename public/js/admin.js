@@ -355,6 +355,243 @@ function limpiarFormulario() {
     cursoEnEdicion = null;
 }
 
+// ============= UPLOAD DE IMÁGENES =============
+let selectedFile = null;
+let selectedCourseId = null;
+
+// Cargar lista de cursos en el selector
+async function loadCoursesForUpload() {
+    try {
+        const data = await fetchAPI('/courses?limit=100');
+        const courses = data.data.data || data.data || [];
+        
+        const select = document.getElementById('uploadCourseSelect');
+        select.innerHTML = '<option value="">-- Selecciona un curso --</option>';
+        
+        courses.forEach(course => {
+            const option = document.createElement('option');
+            option.value = course.id;
+            option.textContent = course.name;
+            select.appendChild(option);
+        });
+
+        // Event listener para actualizar galería
+        select.addEventListener('change', (e) => {
+            selectedCourseId = e.target.value;
+            loadCourseImages(selectedCourseId);
+        });
+    } catch (error) {
+        console.error('Error cargando cursos:', error);
+        showNotification('Error al cargar cursos', 'error');
+    }
+}
+
+// Drag and drop
+const dropZone = document.getElementById('dropZone');
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('bg-blue-50');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('bg-blue-50');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('bg-blue-50');
+    
+    if (e.dataTransfer.files.length > 0) {
+        handleImageSelection(e.dataTransfer.files[0]);
+    }
+});
+
+// Click para seleccionar archivo
+dropZone.addEventListener('click', () => {
+    document.getElementById('imageUploadInput').click();
+});
+
+document.getElementById('imageUploadInput').addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleImageSelection(e.target.files[0]);
+    }
+});
+
+// Manejar selección de imagen
+function handleImageSelection(file) {
+    // Validar tipo
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif'].includes(file.type)) {
+        showNotification('Solo se aceptan imágenes (JPG, PNG, WebP, GIF)', 'error');
+        return;
+    }
+
+    // Validar tamaño (5MB = 5242880 bytes)
+    if (file.size > 5242880) {
+        showNotification('La imagen no puede pesar más de 5MB', 'error');
+        return;
+    }
+
+    selectedFile = file;
+
+    // Mostrar preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('imagePreview').src = e.target.result;
+        document.getElementById('previewContainer').classList.remove('hidden');
+        document.getElementById('dropZoneContent').classList.add('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+// Limpiar preview
+function clearImagePreview() {
+    selectedFile = null;
+    document.getElementById('imageUploadInput').value = '';
+    document.getElementById('previewContainer').classList.add('hidden');
+    document.getElementById('dropZoneContent').classList.remove('hidden');
+}
+
+// Subir imagen
+async function uploadImage() {
+    if (!selectedCourseId) {
+        showNotification('Por favor selecciona un curso', 'error');
+        return;
+    }
+
+    if (!selectedFile) {
+        showNotification('Por favor selecciona una imagen', 'error');
+        return;
+    }
+
+    const uploadBtn = document.getElementById('uploadBtn');
+    uploadBtn.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('image', selectedFile);
+
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        progressContainer.classList.remove('hidden');
+
+        const xhr = new XMLHttpRequest();
+
+        // Progreso
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+                progressText.textContent = Math.round(percentComplete) + '%';
+            }
+        });
+
+        // Completado
+        xhr.addEventListener('load', () => {
+            progressContainer.classList.add('hidden');
+            progressBar.style.width = '0%';
+
+            if (xhr.status === 201 || xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                
+                if (response.success) {
+                    showSuccess('¡Imagen subida correctamente!');
+                    clearImagePreview();
+                    loadCourseImages(selectedCourseId); // Actualizar galería
+                } else {
+                    showError(response.message || 'Error al subir imagen');
+                }
+            } else {
+                const response = JSON.parse(xhr.responseText);
+                showError(response.message || 'Error en la subida');
+            }
+
+            uploadBtn.disabled = false;
+        });
+
+        // Error
+        xhr.addEventListener('error', () => {
+            progressContainer.classList.add('hidden');
+            showError('Error de conexión');
+            uploadBtn.disabled = false;
+        });
+
+        xhr.open('POST', `${API_BASE_URL}/courses/${selectedCourseId}/upload-image`);
+        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+        xhr.send(formData);
+
+    } catch (error) {
+        console.error('Error:', error);
+        showError('Error al subir imagen');
+        uploadBtn.disabled = false;
+    }
+}
+
+// Cargar imágenes del curso
+async function loadCourseImages(courseId) {
+    if (!courseId) {
+        document.getElementById('imageGallery').innerHTML = '<p class="text-gray-600 text-center py-8">Selecciona un curso para ver sus imágenes</p>';
+        return;
+    }
+
+    try {
+        const data = await fetchAPI(`/courses/${courseId}`);
+        const course = data.data;
+
+        if (course.image_url) {
+            const imageUrl = course.image_url.includes('?') 
+                ? course.image_url + '&t=' + Date.now()
+                : course.image_url + '?t=' + Date.now();
+
+            document.getElementById('imageGallery').innerHTML = `
+                <div class="border border-gray-300 rounded-lg overflow-hidden">
+                    <img src="${imageUrl}" alt="${course.name}" class="w-full h-40 object-cover">
+                    <div class="p-4 bg-gray-50">
+                        <p class="text-sm font-bold text-secondary">${course.name}</p>
+                        <p class="text-xs text-gray-600 mt-1 break-all">${course.image_url}</p>
+                        <button type="button" onclick="copyToClipboard('${imageUrl}')" class="mt-2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
+                            📋 Copiar URL
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            document.getElementById('imageGallery').innerHTML = '<p class="text-gray-600 text-center py-8">Este curso aún no tiene imagen</p>';
+        }
+    } catch (error) {
+        console.error('Error cargando imágenes:', error);
+        document.getElementById('imageGallery').innerHTML = '<p class="text-red-600 text-center py-8">Error al cargar imagen</p>';
+    }
+}
+
+// Helper para copiar al portapapeles
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert('URL copiada al portapapeles');
+    });
+}
+
+// Funciones de mensaje mejoradas
+function showSuccess(message) {
+    const msgEl = document.getElementById('uploadMessage');
+    msgEl.textContent = message;
+    msgEl.className = 'p-4 rounded-lg text-sm font-semibold bg-green-100 text-green-700';
+    msgEl.classList.remove('hidden');
+    
+    setTimeout(() => msgEl.classList.add('hidden'), 3000);
+}
+
+function showError(message) {
+    const msgEl = document.getElementById('uploadMessage');
+    msgEl.textContent = message;
+    msgEl.className = 'p-4 rounded-lg text-sm font-semibold bg-red-100 text-red-700';
+    msgEl.classList.remove('hidden');
+    
+    setTimeout(() => msgEl.classList.add('hidden'), 3000);
+}
+
 // ============= LOGOUT =============
 async function logoutAdmin() {
     try {
@@ -375,5 +612,6 @@ async function logoutAdmin() {
 // ============= INICIALIZACIÓN =============
 document.addEventListener('DOMContentLoaded', () => {
     loadCategorias();
+    loadCoursesForUpload(); // Cargar cursos para upload
     switchTab('cursos');
 });
