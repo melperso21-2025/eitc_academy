@@ -48,8 +48,10 @@ class ImageUploadController extends Controller
         // Actualizar curso con la URL de la imagen
         // Si había imagen anterior, eliminarla
         if ($course->image_url) {
-            // Extraer path de la URL anterior y eliminar
-            // (opcional, por ahora solo guardamos la nueva)
+            $oldPath = $this->extractPathFromUrl($course->image_url);
+            if ($oldPath) {
+                $this->firebaseStorage->deleteFile($oldPath);
+            }
         }
 
         $course->update(['image_url' => $result['url']]);
@@ -62,6 +64,23 @@ class ImageUploadController extends Controller
                 'path' => $result['path'],
             ],
         ], 201);
+    }
+
+    /**
+     * Extraer el path de Firebase desde una URL
+     */
+    private function extractPathFromUrl($url)
+    {
+        try {
+            preg_match('/\/o\/(.+)\?/', $url, $matches);
+            if ($matches && isset($matches[1])) {
+                return urldecode($matches[1]);
+            }
+        } catch (\Exception $e) {
+            logger()->error('Error extracting path from URL: ' . $e->getMessage());
+        }
+        
+        return null;
     }
 
     /**

@@ -4,12 +4,22 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Course;
 use App\Models\Category;
+use App\Services\FirebaseStorageService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Str;
 
 class CourseController extends Controller
 {
+    protected $firebaseService;
+
+    /**
+     * Inyectar el servicio de Firebase
+     */
+    public function __construct(FirebaseStorageService $firebaseService)
+    {
+        $this->firebaseService = $firebaseService;
+    }
     /**
      * GET /api/courses
      * Listar todos los cursos con filtros
@@ -138,10 +148,27 @@ class CourseController extends Controller
             'certificate' => 'nullable|string',
             'duration_hours' => 'required|integer|min:1',
             'syllabus' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB máximo
         ]);
 
         // Generar slug automáticamente
         $validated['slug'] = Str::slug($validated['name']);
+
+        // Manejar upload de imagen si existe
+        $imageUrl = null;
+        if ($request->hasFile('image')) {
+            $uploadResult = $this->firebaseService->uploadImage($request->file('image'), 'courses');
+            
+            if (!$uploadResult['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al subir la imagen: ' . $uploadResult['message'],
+                ], 422);
+            }
+
+            $imageUrl = $uploadResult['url'];
+            $validated['image_url'] = $imageUrl;
+        }
 
         $course = Course::create($validated);
 
@@ -177,11 +204,35 @@ class CourseController extends Controller
             'duration_hours' => 'nullable|integer|min:1',
             'syllabus' => 'nullable|string',
             'is_published' => 'nullable|boolean',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB máximo
         ]);
 
         // Actualizar slug si el nombre cambió
         if (isset($validated['name'])) {
             $validated['slug'] = Str::slug($validated['name']);
+        }
+
+        // Manejar cambio de imagen
+        if ($request->hasFile('image')) {
+            // Eliminar imagen anterior si existe
+            if ($course->image_url) {
+                $oldPath = $this->extractPathFromUrl($course->image_url);
+                if ($oldPath) {
+                    $this->firebaseService->deleteFile($oldPath);
+                }
+            }
+
+            // Subir nueva imagen
+            $uploadResult = $this->firebaseService->uploadImage($request->file('image'), 'courses');
+            
+            if (!$uploadResult['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al subir la imagen: ' . $uploadResult['message'],
+                ], 422);
+            }
+
+            $validated['image_url'] = $uploadResult['url'];
         }
 
         $course->update($validated);
@@ -191,6 +242,26 @@ class CourseController extends Controller
             'message' => 'Curso actualizado correctamente',
             'data' => $course,
         ]);
+    }
+
+    /**
+     * Extraer el path de Firebase desde una URL
+     * URL: https://firebasestorage.googleapis.com/v0/b/bucket/o/path%2Fto%2Ffile?alt=media
+     * Retorna: path/to/file
+     */
+    private function extractPathFromUrl($url)
+    {
+        try {
+            // Decodificar URL
+            preg_match('/\/o\/(.+)\?/', $url, $matches);
+            if ($matches && isset($matches[1])) {
+                return urldecode($matches[1]);
+            }
+        } catch (\Exception $e) {
+            logger()->error('Error extracting path from URL: ' . $e->getMessage());
+        }
+        
+        return null;
     }
 
     /**
