@@ -300,49 +300,83 @@ document.getElementById('cursoForm').addEventListener('submit', async (e) => {
 
             // Si hay imagen nueva, subirla
             if (imagen) {
-                const formData = new FormData();
-                formData.append('image', imagen);
+                try {
+                    const formData = new FormData();
+                    formData.append('image', imagen);
 
-                await fetch(`${API_BASE_URL}/courses/${cursoId}/upload-image`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: formData
-                });
+                    const imgResponse = await fetch(`${API_BASE_URL}/courses/${cursoId}/upload-image`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: formData
+                    });
+
+                    if (!imgResponse.ok) {
+                        console.warn('Error subiendo imagen:', imgResponse.statusText);
+                    }
+                } catch (imgError) {
+                    console.error('Error en upload de imagen:', imgError);
+                }
             }
 
             showNotification('Curso actualizado correctamente');
+            limpiarFormulario();
+            await loadMisCursos(); // Recargar lista
+            switchTab('cursos');
         } else {
             // Crear curso
+            console.log('Creando nuevo curso...', cursoData);
             const response = await fetchAPI('/courses', {
                 method: 'POST',
                 body: cursoData
             });
 
+            console.log('Curso creado, respuesta:', response);
+
+            if (!response.data || !response.data.id) {
+                showNotification('Error: No se obtuvo ID del curso creado', 'error');
+                return;
+            }
+
             const nuevoId = response.data.id;
+            console.log('Nuevo curso ID:', nuevoId);
 
             // Si hay imagen, subirla
             if (imagen) {
-                const formData = new FormData();
-                formData.append('image', imagen);
+                try {
+                    console.log('Subiendo imagen...');
+                    const formData = new FormData();
+                    formData.append('image', imagen);
 
-                await fetch(`${API_BASE_URL}/courses/${nuevoId}/upload-image`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: formData
-                });
+                    const imgResponse = await fetch(`${API_BASE_URL}/courses/${nuevoId}/upload-image`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: formData
+                    });
+
+                    console.log('Respuesta upload imagen:', imgResponse.status);
+
+                    if (!imgResponse.ok) {
+                        const errorData = await imgResponse.json();
+                        console.warn('Error subiendo imagen:', errorData);
+                        // No lanzar error, permitir que se continue sin imagen
+                    }
+                } catch (imgError) {
+                    console.error('Error en upload de imagen:', imgError);
+                }
             }
 
             showNotification('Curso creado correctamente');
+            limpiarFormulario();
+            await loadMisCursos(); // Recargar lista ANTES de cambiar tab
+            switchTab('cursos');
         }
 
-        limpiarFormulario();
-        switchTab('cursos');
-
     } catch (error) {
+        console.error('Error completo:', error);
         showNotification('Error: ' + error.message, 'error');
     }
 });

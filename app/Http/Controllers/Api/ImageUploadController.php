@@ -22,48 +22,68 @@ class ImageUploadController extends Controller
      */
     public function uploadCourseImage(Request $request, Course $course)
     {
-        // Verificar que sea admin
-        if (!auth('sanctum')->check() || auth('sanctum')->user()->role !== 'admin') {
-            return response()->json([
-                'success' => false,
-                'message' => 'No autorizado',
-            ], 403);
-        }
-
-        // Validar archivo
-        $validated = $request->validate([
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // máx 5MB
-        ]);
-
-        // Subir a Firebase
-        $result = $this->firebaseStorage->uploadImage($request->file('image'), 'courses');
-
-        if (!$result['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al subir la imagen: ' . $result['message'],
-            ], 400);
-        }
-
-        // Actualizar curso con la URL de la imagen
-        // Si había imagen anterior, eliminarla
-        if ($course->image_url) {
-            $oldPath = $this->extractPathFromUrl($course->image_url);
-            if ($oldPath) {
-                $this->firebaseStorage->deleteFile($oldPath);
+        try {
+            // Verificar que sea admin
+            if (!auth('sanctum')->check() || auth('sanctum')->user()->role !== 'admin') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autorizado',
+                ], 403);
             }
+
+            // Validar archivo
+            $validated = $request->validate([
+                'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            ]);
+
+            // Subir a Firebase
+            $result = $this->firebaseStorage->uploadImage($request->file('image'), 'courses');
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al subir la imagen: ' . $result['message'],
+                ], 400);
+            }
+
+            // Actualizar curso con la URL de la imagen
+            // Si había imagen anterior, eliminarla
+            if ($course->image_url) {
+                $oldPath = $this->extractPathFromUrl($course->image_url);
+                if ($oldPath) {
+                    $this->firebaseStorage->deleteFile($oldPath);
+                }
+            }
+
+            $course->update(['image_url' => $result['url']]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Imagen subida correctamente',
+                'data' => [
+                    'url' => $result['url'],
+                    'path' => $result['path'],
+                ],
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error en uploadCourseImage:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error del servidor: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $course->update(['image_url' => $result['url']]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Imagen subida correctamente',
-            'data' => [
-                'url' => $result['url'],
-                'path' => $result['path'],
-            ],
-        ], 201);
     }
 
     /**
