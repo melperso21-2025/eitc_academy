@@ -7,6 +7,9 @@ use App\Models\Course;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
+/**
+ * Administra comentarios de cursos incluyendo moderación por administradores.
+ */
 class CommentController extends Controller
 {
     /**

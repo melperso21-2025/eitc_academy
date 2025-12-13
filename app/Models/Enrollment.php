@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Registra inscripciones de usuarios en cursos y soporta timestamps personalizados.
+ */
 class Enrollment extends Model
 {
     protected $fillable = ['user_id', 'course_id'];

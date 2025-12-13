@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Representa un curso y sus vínculos con categorías, favoritos, comentarios e inscripciones.
+ */
 class Course extends Model
 {
     protected $fillable = [
@@ -57,6 +60,7 @@ class Course extends Model
 
     public function isFavoritedBy($userId)
     {
+        // Reutiliza la relación para determinar si el usuario ha marcado favorito
         return $this->favorites()->where('user_id', $userId)->exists();
     }
 }

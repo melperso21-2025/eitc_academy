@@ -167,7 +167,7 @@ function setFilterInputsFromState() {
 }
 
 function getFavoriteButtonConfig(isFavorite) {
-    const baseClasses = 'px-4 rounded font-semibold transition flex items-center gap-2 justify-center w-full sm:w-auto sm:min-w-[180px] h-11 sm:h-12 whitespace-normal text-center';
+    const baseClasses = 'px-4 sm:px-5 rounded font-semibold transition flex items-center gap-2 justify-center w-full sm:w-auto sm:min-w-[200px] h-11 sm:h-12 whitespace-nowrap text-center';
     const activeClasses = 'bg-rose-100 text-rose-600 hover:bg-rose-200';
     const inactiveClasses = 'bg-gray-200 text-secondary hover:bg-gray-300';
 
@@ -297,11 +297,11 @@ function buildPriceConversionChips(amountUSD) {
         const flagStyle = target.flagStyle ? ` style="background:${target.flagStyle};"` : '';
 
         return `
-            <div class="inline-flex flex-1 min-w-[160px] max-w-[220px] h-11 items-center gap-2.5 px-3 rounded-full bg-secondary/5 text-secondary text-[11px] font-semibold border border-secondary/10 shadow-sm">
+            <div class="flex w-full min-w-[200px] items-center gap-4 px-5 py-3 rounded-2xl bg-secondary/5 text-secondary text-[12px] font-semibold border border-secondary/10 shadow-sm">
                 <span class="flex-none w-6 h-6 rounded-full border border-white/40 shadow-sm"${flagStyle} aria-hidden="true"></span>
-                <span class="flex flex-col justify-center leading-tight text-[10px]">
-                    <span class="font-semibold text-[11px]">${formattedAmount}</span>
-                    <span class="uppercase text-gray-500 font-medium tracking-wide truncate">${target.label}</span>
+                <span class="flex flex-col justify-center leading-tight text-[11px] text-left">
+                    <span class="font-semibold text-[13px]">${formattedAmount}</span>
+                    <span class="uppercase text-gray-500 font-medium tracking-wide">${target.label}</span>
                 </span>
             </div>
         `;
@@ -316,7 +316,7 @@ async function renderPriceConversionChips(amountUSD) {
         return;
     }
 
-    const gridClasses = ['grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-2'];
+    const gridClasses = ['grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-[repeat(3,minmax(220px,1fr))]', 'gap-4', 'sm:gap-5', 'lg:gap-6'];
 
     const numericAmount = Number(amountUSD);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
@@ -689,7 +689,8 @@ async function loadCourses(filters = currentCourseFilters) {
         }
 
         const response = await fetchAPI(url);
-        let courses = response.data.data || response.data;
+        const rawCourses = response?.data?.data || response?.data || [];
+        let courses = Array.isArray(rawCourses) ? rawCourses : [];
 
         if (currentCourseFilters.promotions) {
             courses = courses.filter((course) => {
@@ -699,7 +700,9 @@ async function loadCourses(filters = currentCourseFilters) {
             });
         }
 
-        lastLoadedCourses = Array.isArray(courses) ? courses : [];
+        const publishedCourses = courses.filter((course) => isCoursePublished(course));
+
+        lastLoadedCourses = publishedCourses;
         renderCourseSections(lastLoadedCourses);
 
     } catch (error) {
@@ -734,6 +737,20 @@ function isPromotionalCourse(course) {
     const priceValue = Number(course?.price ?? 0);
     const discountValue = Number(course?.discount_amount ?? 0);
     return discountValue > 0 && discountValue < priceValue;
+}
+
+function isCoursePublished(course) {
+    const flag = course?.is_published;
+    if (typeof flag === 'boolean') {
+        return flag;
+    }
+    if (flag === 1 || flag === '1') {
+        return true;
+    }
+    if (typeof flag === 'string') {
+        return flag.toLowerCase() === 'true';
+    }
+    return false;
 }
 
 function sortCoursesByFavoritePriority(courses) {
@@ -1399,7 +1416,6 @@ async function showCourseDetail(course) {
     const hasDiscount = discountValue > 0 && discountValue < priceValue;
     const finalPrice = hasDiscount ? Math.max(priceValue - discountValue, 0) : priceValue;
     const discountPercentLabel = formatPercent(discountPercent);
-    const basePricePen = convertCurrency(priceValue, 'PEN');
     
     const isFavorited = Boolean(course.is_favorite);
     const isEnrolled = Boolean(course.is_enrolled);
@@ -1462,13 +1478,13 @@ async function showCourseDetail(course) {
                 `}
             </div>
 
-            <div class="border-t pt-4 flex justify-between items-start gap-4">
-                <div class="space-y-2">
+            <div class="border-t pt-4 flex flex-col gap-6">
+                <div class="w-full space-y-2">
                     ${hasDiscount ? `
-                        <p class="text-sm text-gray-500 line-through">${formatUSD(priceValue)} · ≈ ${basePricePen} PEN</p>
+                        <p class="text-sm text-gray-500 line-through">${formatUSD(priceValue)}</p>
                     ` : ''}
                     <p class="text-3xl font-bold text-emerald-600">${formatUSD(finalPrice)}</p>
-                    <div id="priceConversionChips" class="mt-3 flex flex-wrap gap-2 text-xs text-gray-500" aria-label="Conversión por país">
+                    <div id="priceConversionChips" class="mt-3 text-xs text-gray-500" aria-label="Conversión por país">
                         <p class="text-xs text-gray-500">Cargando conversiones...</p>
                     </div>
                     ${hasDiscount ? `
@@ -1477,9 +1493,9 @@ async function showCourseDetail(course) {
                         </span>
                     ` : ''}
                 </div>
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 w-full">
+                <div class="w-full flex flex-col sm:flex-row sm:items-center gap-3">
                     ${currentUser ? `
-                        <button class="px-4 bg-primary text-white rounded hover:bg-primary/90 transition font-semibold w-full sm:w-auto sm:min-w-[180px] h-11 sm:h-12 flex items-center justify-center gap-2 text-center" onclick="enrollCourse(${course.id})">
+                        <button class="px-4 sm:px-5 bg-primary text-white rounded hover:bg-primary/90 transition font-semibold w-full sm:w-auto sm:min-w-[200px] h-11 sm:h-12 flex items-center justify-center gap-2 text-center" onclick="enrollCourse(${course.id})">
                             Inscribirse
                         </button>
                         <button id="favoriteToggleButton" type="button" class="${favoriteButtonConfig.classes}" data-course-id="${course.id}" data-favorite="${isFavorited ? '1' : '0'}" onclick="toggleFavorite(${course.id})">

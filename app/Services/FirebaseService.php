@@ -3,7 +3,10 @@
 namespace App\Services;
  
 use Kreait\Firebase\Factory;
- 
+
+/**
+ * Wrapper mínimo para subir archivos al bucket de Firebase Storage vía SDK oficial.
+ */
 class FirebaseService
 {
     protected $storage;

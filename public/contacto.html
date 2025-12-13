@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contáctanos - EITC Academy</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="bg-gray-50">
+    <nav class="bg-primary text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-2">
+                    <div id="publicLogoWrapper" class="w-8 h-8 bg-accent rounded-lg overflow-hidden flex items-center justify-center">
+                        <img id="publicLogo" src="" alt="Logo principal" class="w-full h-full object-cover hidden">
+                    </div>
+                    <span class="font-bold text-xl">EITC Academy</span>
+                </div>
+                <div class="hidden md:flex space-x-6">
+                    <a href="index.html" class="hover:text-accent transition">Inicio</a>
+                    <a href="quienes-somos.html" class="hover:text-accent transition">¿Quiénes somos?</a>
+                    <a href="personal.html" class="hover:text-accent transition">Nuestro personal</a>
+                    <a href="contacto.html" class="text-accent font-semibold">Contáctanos</a>
+                </div>
+                <div class="flex space-x-4">
+                    <button id="btnLogin" class="px-4 py-2 rounded hover:bg-opacity-80 transition">Iniciar Sesión</button>
+                    <button id="btnRegister" class="px-4 py-2 bg-accent text-secondary rounded hover:bg-opacity-90 transition">Registrarse</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <header class="bg-gradient-to-r from-primary to-blue-900 text-white py-20">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
+            <h1 class="text-5xl font-bold">Estamos aquí para tu próximo proyecto industrial</h1>
+            <p class="text-lg text-white/80">Coordina una sesión de diagnóstico, solicita información sobre nuestros cursos o agenda un workshop in company.</p>
+        </div>
+    </header>
+
+    <main class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <div class="space-y-8">
+                <div class="bg-secondary/5 border border-secondary/10 rounded-2xl p-6 space-y-4">
+                    <h2 class="text-3xl font-bold text-secondary">Datos de contacto</h2>
+                    <div>
+                        <h3 class="text-sm font-semibold text-secondary uppercase tracking-wide">Correo principal</h3>
+                        <p class="text-gray-600">admision@eitcacademy.com</p>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-secondary uppercase tracking-wide">Teléfono corporativo</h3>
+                        <p class="text-gray-600">+51 987 456 321</p>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-secondary uppercase tracking-wide">Atención</h3>
+                        <p class="text-gray-600">Lunes a viernes · 09:00 - 18:00 (GMT-5)</p>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-secondary/10 rounded-2xl p-6 shadow-sm">
+                    <h2 class="text-2xl font-bold text-secondary mb-4">Direcciones y cobertura</h2>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><span class="font-semibold text-secondary">Oficina central:</span> Av. Los Ingenieros 204, Lima, Perú.</li>
+                        <li><span class="font-semibold text-secondary">Laboratorios asociados:</span> Callao, Medellín y Santiago.</li>
+                        <li><span class="font-semibold text-secondary">Soporte técnico 24/7:</span> soporte@eitcacademy.com.</li>
+                        <li><span class="font-semibold text-secondary">WhatsApp empresarial:</span> +51 955 222 110.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-primary to-blue-900 rounded-3xl text-white p-8 shadow-xl space-y-6">
+                <h2 class="text-3xl font-semibold">Cuéntanos sobre tu equipo</h2>
+                <p class="text-white/80">Envíanos los objetivos de tu planta o el reto que buscas resolver. En menos de 24 horas te contactaremos con una propuesta de itinerario o consultoría.</p>
+                <form id="contactForm" class="space-y-4">
+                    <input type="text" name="name" placeholder="Nombre y apellido" class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-accent" required>
+                    <input type="email" name="email" placeholder="Correo corporativo" class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-accent" required>
+                    <input type="text" name="company" placeholder="Empresa" class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-accent">
+                    <textarea name="message" rows="4" placeholder="¿Qué necesitas lograr?" class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-accent"></textarea>
+                    <button type="submit" class="w-full px-4 py-3 bg-accent text-secondary font-semibold rounded-lg hover:bg-opacity-90 transition">Enviar mensaje</button>
+                    <p class="text-sm text-white/70 text-center">También puedes escribirnos a <span class="font-semibold">projects@eitcacademy.com</span></p>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <section class="bg-secondary/5 py-16">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
+            <h2 class="text-3xl font-bold text-secondary">Visítanos o solicita una demo</h2>
+            <p class="text-gray-600">Coordinamos reuniones virtuales o presenciales para mostrar nuestras plataformas, laboratorios y metodología.</p>
+            <div class="flex flex-wrap justify-center gap-4">
+                <a href="https://maps.app.goo.gl" target="_blank" rel="noopener" class="px-6 py-3 bg-primary text-white font-semibold rounded hover:bg-primary/90 transition">Ver ubicación</a>
+                <a href="index.html#cursos" class="px-6 py-3 bg-white border border-secondary/20 text-secondary font-semibold rounded hover:bg-gray-50 transition">Explorar cursos</a>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-secondary text-white py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h4 class="text-lg font-bold mb-4">EITC Academy</h4>
+                    <p class="text-gray-300 text-sm">Formación técnica para equipos industriales con foco en resultados medibles.</p>
+                </div>
+                <div>
+                    <h4 class="text-lg font-bold mb-4">Enlaces</h4>
+                    <ul class="space-y-2 text-gray-300 text-sm">
+                        <li><a href="index.html" class="hover:text-white transition">Inicio</a></li>
+                        <li><a href="quienes-somos.html" class="hover:text-white transition">¿Quiénes somos?</a></li>
+                        <li><a href="personal.html" class="hover:text-white transition">Nuestro personal</a></li>
+                        <li><a href="contacto.html" class="hover:text-white transition">Contáctanos</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-bold mb-4">Contacto</h4>
+                    <p class="text-gray-300 text-sm">Email: info@eitcacademy.com</p>
+                    <p class="text-gray-300 text-sm">Teléfono: +51 999 999 999</p>
+                </div>
+            </div>
+            <div class="border-t border-white/20 mt-8 pt-8 text-center text-sm text-gray-300">
+                <p>&copy; 2025 EITC Academy. Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <div id="loginModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full">
+            <h3 class="text-2xl font-bold text-secondary mb-6">Iniciar Sesión</h3>
+            <form id="loginForm" class="space-y-4">
+                <input type="email" id="loginEmail" placeholder="Correo electrónico" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="password" id="loginPassword" placeholder="Contraseña" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <button type="submit" class="w-full bg-primary text-white py-2 rounded hover:bg-opacity-90 transition font-bold">Iniciar Sesión</button>
+                <p class="text-center text-gray-600">¿No tienes cuenta? <button type="button" class="text-accent font-bold hover:underline" onclick="switchModal('login', 'register')">Regístrate aquí</button></p>
+            </form>
+            <button onclick="closeModal('login')" class="mt-4 w-full text-gray-600 hover:text-secondary">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="registerModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full">
+            <h3 class="text-2xl font-bold text-secondary mb-6">Crear Cuenta</h3>
+            <form id="registerForm" class="space-y-4">
+                <input type="text" id="registerName" placeholder="Nombre completo" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="email" id="registerEmail" placeholder="Correo electrónico" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="password" id="registerPassword" placeholder="Contraseña" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <input type="password" id="registerPasswordConfirm" placeholder="Confirmar contraseña" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary" required>
+                <button type="submit" class="w-full bg-accent text-secondary py-2 rounded hover:bg-opacity-90 transition font-bold">Crear Cuenta</button>
+                <p class="text-center text-gray-600">¿Ya tienes cuenta? <button type="button" class="text-primary font-bold hover:underline" onclick="switchModal('register', 'login')">Inicia sesión aquí</button></p>
+            </form>
+            <button onclick="closeModal('register')" class="mt-4 w-full text-gray-600 hover:text-secondary">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="courseDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+        <div class="relative bg-white rounded-lg p-8 max-w-3xl w-full my-8 shadow-xl max-h-[90vh] overflow-y-auto">
+            <button onclick="closeModal('courseDetail')" class="absolute top-4 right-4 text-gray-600 text-2xl hover:text-secondary" aria-label="Cerrar detalle">&times;</button>
+            <div id="courseDetailContent" class="mt-4"></div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

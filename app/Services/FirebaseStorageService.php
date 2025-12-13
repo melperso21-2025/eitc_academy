@@ -8,6 +8,9 @@ use GuzzleHttp\Client;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Handler\CurlHandler;
 
+/**
+ * Encapsula interacciones con Firebase Storage para subir, borrar y obtener URLs públicas.
+ */
 class FirebaseStorageService
 {
     protected $storage;
@@ -19,7 +22,7 @@ class FirebaseStorageService
 
     public function __construct()
     {
-        // Las variables de entorno se pueden obtener así
+        // Inicializa credenciales y clientes a partir del .env y fallback local
         $credentialsEnv = env('FIREBASE_CREDENTIALS');
         $credentialsPath = $credentialsEnv ? base_path($credentialsEnv) : base_path('storage/app/firebase-credentials.json');
         
@@ -194,6 +197,7 @@ class FirebaseStorageService
 
     private function refreshStorageClient(): void
     {
+        // Regenera el cliente de Google Storage para aplicar nuevas configuraciones o reintentos
         $this->storageConfig = $this->buildStorageConfig();
         $this->storage = new StorageClient($this->storageConfig);
         $this->bucket = $this->storage->bucket($this->bucketName);
@@ -201,6 +205,7 @@ class FirebaseStorageService
 
     private function buildStorageConfig(): array
     {
+        // Construye la configuración base del SDK y aplica workarounds para entornos locales Windows
         $config = [
             'projectId' => $this->projectId,
             'keyFile' => $this->credentialsArray,

@@ -6,6 +6,9 @@ use App\Models\ExchangeRate;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
 
+/**
+ * Administra las tasas de cambio con caché local y fallback para modo demo.
+ */
 class ExchangeRateService
 {
     /**

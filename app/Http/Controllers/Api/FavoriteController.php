@@ -7,6 +7,9 @@ use App\Models\Course;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
+/**
+ * Expone endpoints para alternar cursos favoritos del usuario autenticado.
+ */
 class FavoriteController extends Controller
 {
     /**

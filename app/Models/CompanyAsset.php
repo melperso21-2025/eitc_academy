@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Recursos corporativos versionables (logos, historia, fallback) gestionados vía panel admin.
+ */
 class CompanyAsset extends Model
 {
     use HasFactory;

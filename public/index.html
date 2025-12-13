@@ -4,20 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EITC Academy - Plataforma de Formación Industrial</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#003A5D',
-                        secondary: '#1A1A1A',
-                        accent: '#0BBF78',
-                    }
-                }
-            }
-        }
-    </script>
+    <link rel="stylesheet" href="/css/app.css">
     <style>
         .line-clamp-3 {
             display: -webkit-box;
@@ -39,8 +26,10 @@
                     <span class="font-bold text-xl">EITC Academy</span>
                 </div>
                 <div class="hidden md:flex space-x-6">
-                    <a href="#cursos" class="hover:text-accent transition">Cursos</a>
-                    <a href="#categorias" class="hover:text-accent transition">Categorías</a>
+                    <a href="index.html" class="hover:text-accent transition">Inicio</a>
+                    <a href="quienes-somos.html" class="hover:text-accent transition">¿Quiénes somos?</a>
+                    <a href="personal.html" class="hover:text-accent transition">Nuestro personal</a>
+                    <a href="contacto.html" class="hover:text-accent transition">Contáctanos</a>
                 </div>
                 <div class="flex space-x-4">
                     <button id="btnLogin" class="px-4 py-2 rounded hover:bg-opacity-80 transition">Iniciar Sesión</button>
@@ -57,7 +46,7 @@
                 <div class="flex flex-col justify-center">
                     <h1 class="text-5xl font-bold mb-4">Formación Industrial de Calidad</h1>
                     <p class="text-xl text-gray-200 mb-6">Aprende de expertos en energía eléctrica y procesos industriales con certificación internacional.</p>
-                    <button class="bg-accent text-secondary px-6 py-3 rounded font-bold hover:bg-opacity-90 transition w-fit">Explorar Cursos</button>
+                    <a href="#cursos" class="bg-accent text-secondary px-6 py-3 rounded font-bold hover:bg-opacity-90 transition w-fit">Explorar Cursos</a>
                 </div>
                 <div class="flex items-center justify-center">
                     <div id="brandImageContainer" class="w-full h-80 bg-white bg-opacity-10 rounded-lg flex items-center justify-center overflow-hidden relative">
@@ -135,9 +124,9 @@
 
     <!-- Modal de Detalle de Curso -->
     <div id="courseDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-        <div class="bg-white rounded-lg p-8 max-w-3xl w-full my-8">
-            <button onclick="closeModal('courseDetail')" class="text-gray-600 float-right text-2xl hover:text-secondary">&times;</button>
-            <div id="courseDetailContent">
+        <div class="relative bg-white rounded-lg p-8 max-w-3xl w-full my-8 shadow-xl max-h-[90vh] overflow-y-auto">
+            <button onclick="closeModal('courseDetail')" class="absolute top-4 right-4 text-gray-600 text-2xl hover:text-secondary" aria-label="Cerrar detalle">&times;</button>
+            <div id="courseDetailContent" class="mt-4">
                 <!-- Contenido dinámico del curso -->
             </div>
         </div>
@@ -154,9 +143,9 @@
                 <div>
                     <h4 class="text-lg font-bold mb-4">Enlaces Rápidos</h4>
                     <ul class="space-y-2 text-gray-400">
-                        <li><a href="#" class="hover:text-white transition">Cursos</a></li>
-                        <li><a href="#" class="hover:text-white transition">Categorías</a></li>
-                        <li><a href="#" class="hover:text-white transition">Contacto</a></li>
+                        <li><a href="quienes-somos.html" class="hover:text-white transition">¿Quiénes somos?</a></li>
+                        <li><a href="personal.html" class="hover:text-white transition">Nuestro personal</a></li>
+                        <li><a href="contacto.html" class="hover:text-white transition">Contáctanos</a></li>
                     </ul>
                 </div>
                 <div>

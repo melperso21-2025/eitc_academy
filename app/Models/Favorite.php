@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Vincula usuarios con cursos marcados como favoritos.
+ */
 class Favorite extends Model
 {
     protected $fillable = ['user_id', 'course_id'];

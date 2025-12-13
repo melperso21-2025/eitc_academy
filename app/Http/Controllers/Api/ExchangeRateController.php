@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Services\ExchangeRateService;
 use Illuminate\Http\Request;
 
+/**
+ * Orquesta consultas de tasas de cambio y conversiones para el frontend.
+ */
 class ExchangeRateController extends Controller
 {
     protected $exchangeRateService;

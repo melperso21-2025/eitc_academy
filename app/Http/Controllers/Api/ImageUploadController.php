@@ -7,6 +7,9 @@ use App\Models\Course;
 use App\Services\FirebaseStorageService;
 use Illuminate\Http\Request;
 
+/**
+ * Expone utilidades para manejar imágenes de cursos y pruebas en Firebase Storage.
+ */
 class ImageUploadController extends Controller
 {
     protected $firebaseStorage;

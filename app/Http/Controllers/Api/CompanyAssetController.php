@@ -8,6 +8,9 @@ use App\Services\FirebaseStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
+/**
+ * Administra recursos gráficos corporativos almacenados en Firebase Storage.
+ */
 class CompanyAssetController extends Controller
 {
     private const ALLOWED_TYPES = ['logo', 'brand', 'history', 'course_fallback'];

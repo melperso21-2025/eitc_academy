@@ -7,6 +7,9 @@ use App\Models\Course;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
+/**
+ * Controla el ciclo de vida de inscripciones simulando compras de cursos para usuarios.
+ */
 class EnrollmentController extends Controller
 {
     /**

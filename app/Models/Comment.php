@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Comentarios de participantes asociados a cursos y usuarios.
+ */
 class Comment extends Model
 {
     protected $fillable = ['user_id', 'course_id', 'content'];

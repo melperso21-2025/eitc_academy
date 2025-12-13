@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
+/**
+ * CRUD de categorías que agrupan el catálogo de cursos.
+ */
 class CategoryController extends Controller
 {
     /**

@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
+/**
+ * Gestiona el catálogo de cursos y coordina sincronización con Firebase Storage.
+ */
 class CourseController extends Controller
 {
     protected $firebaseService;
@@ -29,12 +32,14 @@ class CourseController extends Controller
      */
     public function index(Request $request)
     {
+        // Construye la consulta base con relaciones para paginar sin N+1
         $query = Course::with('category')
             ->withCount('comments');
 
         $favoriteCourseMap = [];
         $authenticatedUser = auth('sanctum')->user();
         if ($authenticatedUser) {
+            // Crea un mapa {course_id => true} para etiquetar favoritos sin consultas extra
             $favoriteCourseMap = array_fill_keys(
                 $authenticatedUser
                     ->favorites()
@@ -87,6 +92,7 @@ class CourseController extends Controller
         }
 
         if ($isAdmin) {
+            // Admin recibe colección completa para panel de gestión
             $courses = $query->orderByDesc('created_at')->get();
 
             $courses->transform(function ($course) use ($favoriteCourseMap) {
@@ -338,7 +344,7 @@ class CourseController extends Controller
 
         // Manejar cambio de imagen
         if ($request->hasFile('image')) {
-            // Eliminar imagen anterior si existe
+            // Limpia el recurso previo en Firebase antes de subir el nuevo archivo
             if ($course->image_url) {
                 $oldPath = $this->extractPathFromUrl($course->image_url);
                 if ($oldPath) {
