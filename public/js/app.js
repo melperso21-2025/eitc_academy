@@ -17,29 +17,107 @@ const GRID_ITEMS_PER_PAGE = 15;
 let lastLoadedCourses = [];
 let activeCourseDetail = null;
 let editingCommentId = null;
+let exchangeRatesFetchPromise = null;
+
+const PRICE_CONVERSION_TARGETS = [
+    {
+        code: 'PEN',
+        countryAbbr: 'PE',
+        label: 'Perú',
+        locale: 'es-PE',
+        flagStyle: 'linear-gradient(90deg, #dc2626 0%, #dc2626 33%, #f8fafc 33%, #f8fafc 66%, #dc2626 66%, #dc2626 100%)'
+    },
+    {
+        code: 'COP',
+        countryAbbr: 'CO',
+        label: 'Colombia',
+        locale: 'es-CO',
+        flagStyle: 'linear-gradient(180deg, #facc15 0%, #facc15 33%, #1d4ed8 33%, #1d4ed8 66%, #dc2626 66%, #dc2626 100%)'
+    },
+    {
+        code: 'CLP',
+        countryAbbr: 'CL',
+        label: 'Chile',
+        locale: 'es-CL',
+        flagStyle: 'linear-gradient(180deg, #1d4ed8 0%, #1d4ed8 50%, #f8fafc 50%, #dc2626 50%, #dc2626 100%)'
+    },
+    {
+        code: 'BOB',
+        countryAbbr: 'BO',
+        label: 'Bolivia',
+        locale: 'es-BO',
+        flagStyle: 'linear-gradient(180deg, #dc2626 0%, #dc2626 33%, #facc15 33%, #facc15 66%, #16a34a 66%, #16a34a 100%)'
+    },
+    {
+        code: 'ARS',
+        countryAbbr: 'AR',
+        label: 'Argentina',
+        locale: 'es-AR',
+        flagStyle: 'linear-gradient(180deg, #38bdf8 0%, #38bdf8 33%, #f8fafc 33%, #f8fafc 66%, #38bdf8 66%, #38bdf8 100%)'
+    },
+    {
+        code: 'BRL',
+        countryAbbr: 'BR',
+        label: 'Brasil',
+        locale: 'pt-BR',
+        flagStyle: 'linear-gradient(180deg, #15803d 0%, #15803d 50%, #facc15 50%, #facc15 100%)'
+    }
+];
+
+const EXCHANGE_RATE_FALLBACKS = {
+    PEN: 3.89,
+    COP: 4150.0,
+    CLP: 890.5,
+    BOB: 6.9,
+    ARS: 1050.0,
+    BRL: 5.23
+};
 
 // ============= CARGAR CAMBIOS DE MONEDA =============
 let exchangeRates = {};
 let currentCourseFilters = getInitialFiltersFromQuery();
 
 async function loadExchangeRates() {
-    try {
-        const response = await fetchAPI('/exchange-rates');
-        const rates = response.rates || response.data;
-        
-        rates.forEach(rate => {
-            exchangeRates[rate.to_currency] = rate.rate;
-        });
-        
-        console.log('Tasas de cambio cargadas:', exchangeRates);
-    } catch (error) {
-        console.error('Error al cargar tasas de cambio:', error);
+    if (exchangeRatesFetchPromise) {
+        return exchangeRatesFetchPromise;
     }
+
+    exchangeRatesFetchPromise = (async () => {
+        try {
+            const response = await fetchAPI('/exchange-rates');
+            const rates = response.rates || response.data || [];
+
+            if (Array.isArray(rates)) {
+                rates.forEach((rate) => {
+                    if (rate?.to_currency && Number.isFinite(Number(rate?.rate))) {
+                        exchangeRates[rate.to_currency] = Number(rate.rate);
+                    }
+                });
+            } else if (rates && typeof rates === 'object') {
+                Object.entries(rates).forEach(([currencyCode, rateValue]) => {
+                    if (currencyCode && Number.isFinite(Number(rateValue))) {
+                        exchangeRates[currencyCode] = Number(rateValue);
+                    }
+                });
+            }
+
+            console.log('Tasas de cambio cargadas:', exchangeRates);
+        } catch (error) {
+            console.error('Error al cargar tasas de cambio:', error);
+            throw error;
+        } finally {
+            exchangeRatesFetchPromise = null;
+        }
+
+        return exchangeRates;
+    })();
+
+    return exchangeRatesFetchPromise;
 }
 
 function convertCurrency(amount, toCurrency = 'PEN') {
     const numericAmount = Number(amount) || 0;
-    const rate = exchangeRates[toCurrency];
+    const rate = getEffectiveExchangeRate(toCurrency);
     if (!rate) return numericAmount.toFixed(2);
     return (numericAmount * rate).toFixed(2);
 }
@@ -89,7 +167,7 @@ function setFilterInputsFromState() {
 }
 
 function getFavoriteButtonConfig(isFavorite) {
-    const baseClasses = 'px-4 py-2 rounded font-semibold transition flex items-center gap-2';
+    const baseClasses = 'px-4 rounded font-semibold transition flex items-center gap-2 justify-center w-full sm:w-auto sm:min-w-[180px] h-11 sm:h-12 whitespace-normal text-center';
     const activeClasses = 'bg-rose-100 text-rose-600 hover:bg-rose-200';
     const inactiveClasses = 'bg-gray-200 text-secondary hover:bg-gray-300';
 
@@ -162,6 +240,111 @@ function updateCourseDetailCommentsHeader(newCount) {
     const countSpan = document.getElementById('commentCountValue');
     if (countSpan) {
         countSpan.textContent = countValue;
+    }
+}
+
+function getEffectiveExchangeRate(currencyCode) {
+    const directRate = Number(exchangeRates?.[currencyCode]);
+    if (Number.isFinite(directRate) && directRate > 0) {
+        return directRate;
+    }
+
+    const fallbackRate = Number(EXCHANGE_RATE_FALLBACKS?.[currencyCode]);
+    if (Number.isFinite(fallbackRate) && fallbackRate > 0) {
+        return fallbackRate;
+    }
+
+    return null;
+}
+
+function formatCurrencyAmount(amount, currencyCode, locale) {
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount)) {
+        return '';
+    }
+
+    try {
+        return new Intl.NumberFormat(locale || 'es-ES', {
+            style: 'currency',
+            currency: currencyCode,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(numericAmount);
+    } catch (error) {
+        console.warn('No se pudo formatear la moneda', currencyCode, error);
+        return `${currencyCode} ${numericAmount.toFixed(2)}`;
+    }
+}
+
+function buildPriceConversionChips(amountUSD) {
+    const numericAmount = Number(amountUSD);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        return '';
+    }
+
+    const chips = PRICE_CONVERSION_TARGETS.map((target) => {
+        const rate = getEffectiveExchangeRate(target.code);
+        if (!Number.isFinite(rate) || rate <= 0) {
+            return null;
+        }
+
+        const convertedAmount = numericAmount * rate;
+        const formattedAmount = formatCurrencyAmount(convertedAmount, target.code, target.locale);
+        if (!formattedAmount) {
+            return null;
+        }
+
+        const flagStyle = target.flagStyle ? ` style="background:${target.flagStyle};"` : '';
+
+        return `
+            <div class="inline-flex flex-1 min-w-[160px] max-w-[220px] h-11 items-center gap-2.5 px-3 rounded-full bg-secondary/5 text-secondary text-[11px] font-semibold border border-secondary/10 shadow-sm">
+                <span class="flex-none w-6 h-6 rounded-full border border-white/40 shadow-sm"${flagStyle} aria-hidden="true"></span>
+                <span class="flex flex-col justify-center leading-tight text-[10px]">
+                    <span class="font-semibold text-[11px]">${formattedAmount}</span>
+                    <span class="uppercase text-gray-500 font-medium tracking-wide truncate">${target.label}</span>
+                </span>
+            </div>
+        `;
+    }).filter(Boolean);
+
+    return chips.join('');
+}
+
+async function renderPriceConversionChips(amountUSD) {
+    const container = document.getElementById('priceConversionChips');
+    if (!container) {
+        return;
+    }
+
+    const gridClasses = ['grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-2'];
+
+    const numericAmount = Number(amountUSD);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        container.innerHTML = '';
+        container.classList.remove(...gridClasses);
+        return;
+    }
+
+    const hasRatesLoaded = Object.keys(exchangeRates).length > 0;
+    if (!hasRatesLoaded) {
+        container.innerHTML = '<p class="text-xs text-gray-500">Cargando conversiones...</p>';
+        container.classList.remove(...gridClasses);
+        try {
+            await loadExchangeRates();
+        } catch (error) {
+            container.innerHTML = '<p class="text-xs text-red-600">No se pudieron cargar las conversiones.</p>';
+            container.classList.remove(...gridClasses);
+            return;
+        }
+    }
+
+    const markup = buildPriceConversionChips(numericAmount);
+    if (markup) {
+        container.innerHTML = markup;
+        container.classList.add(...gridClasses);
+    } else {
+        container.innerHTML = '<p class="text-xs text-gray-500">Conversiones no disponibles.</p>';
+        container.classList.remove(...gridClasses);
     }
 }
 
@@ -1216,7 +1399,6 @@ async function showCourseDetail(course) {
     const hasDiscount = discountValue > 0 && discountValue < priceValue;
     const finalPrice = hasDiscount ? Math.max(priceValue - discountValue, 0) : priceValue;
     const discountPercentLabel = formatPercent(discountPercent);
-    const finalPricePen = convertCurrency(finalPrice, 'PEN');
     const basePricePen = convertCurrency(priceValue, 'PEN');
     
     const isFavorited = Boolean(course.is_favorite);
@@ -1286,16 +1468,18 @@ async function showCourseDetail(course) {
                         <p class="text-sm text-gray-500 line-through">${formatUSD(priceValue)} · ≈ ${basePricePen} PEN</p>
                     ` : ''}
                     <p class="text-3xl font-bold text-emerald-600">${formatUSD(finalPrice)}</p>
-                    <p class="text-xs text-gray-600">≈ ${finalPricePen} PEN</p>
+                    <div id="priceConversionChips" class="mt-3 flex flex-wrap gap-2 text-xs text-gray-500" aria-label="Conversión por país">
+                        <p class="text-xs text-gray-500">Cargando conversiones...</p>
+                    </div>
                     ${hasDiscount ? `
                         <span class="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
                             Ahorra ${formatUSD(discountValue)} · ${discountPercentLabel} menos
                         </span>
                     ` : ''}
                 </div>
-                <div class="space-x-2">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 w-full">
                     ${currentUser ? `
-                        <button class="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90" onclick="enrollCourse(${course.id})">
+                        <button class="px-4 bg-primary text-white rounded hover:bg-primary/90 transition font-semibold w-full sm:w-auto sm:min-w-[180px] h-11 sm:h-12 flex items-center justify-center gap-2 text-center" onclick="enrollCourse(${course.id})">
                             Inscribirse
                         </button>
                         <button id="favoriteToggleButton" type="button" class="${favoriteButtonConfig.classes}" data-course-id="${course.id}" data-favorite="${isFavorited ? '1' : '0'}" onclick="toggleFavorite(${course.id})">
@@ -1322,6 +1506,7 @@ async function showCourseDetail(course) {
     }
 
     resetCommentForm();
+    renderPriceConversionChips(finalPrice);
 
     // Cargar comentarios
     loadComments(course.id);
@@ -1442,8 +1627,12 @@ async function enrollCourse(courseId) {
             body: JSON.stringify({ course_id: courseId })
         });
 
-        showNotification('¡Te has inscrito al curso correctamente!');
-        closeModal('courseDetail');
+        const enrolledCourse =
+            (activeCourseDetail && activeCourseDetail.id === courseId)
+                ? activeCourseDetail
+                : lastLoadedCourses.find((course) => course.id === courseId);
+
+        showEnrollmentConfirmation(enrolledCourse);
         
     } catch (error) {
         showNotification('Error al inscribirse: ' + error.message, 'error');
@@ -1576,7 +1765,7 @@ function updateUIAfterAuth() {
                 // Mostrar opciones
                 showLogoutMenu();
             } else {
-                logout();
+                promptLogoutConfirmation();
             }
         };
         btnRegister.style.display = 'none';
@@ -1593,7 +1782,7 @@ function showLogoutMenu() {
     } else {
         menuHTML += '<a href="/dashboard.html" class="block px-4 py-2 text-secondary hover:bg-gray-100 transition">Mi Dashboard</a>';
     }
-    menuHTML += '<button onclick="logout()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 transition">Cerrar Sesión</button>';
+    menuHTML += '<button onclick="promptLogoutConfirmation()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 transition">Cerrar Sesión</button>';
     
     menu.innerHTML = menuHTML;
     document.body.appendChild(menu);
@@ -1607,6 +1796,83 @@ function showLogoutMenu() {
             }
         });
     }, 100);
+}
+
+function promptLogoutConfirmation() {
+    const shouldLogout = confirm('¿Deseas cerrar sesión?');
+    if (shouldLogout) {
+        logout();
+    }
+}
+
+function getCompanyLogoUrl() {
+    if (publicLogoImg && publicLogoImg.src) {
+        return publicLogoImg.src;
+    }
+    if (brandImageEl && brandImageEl.src) {
+        return brandImageEl.src;
+    }
+    return null;
+}
+
+function closeEnrollmentConfirmation() {
+    const overlay = document.getElementById('enrollmentConfirmationOverlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    document.body.classList.remove('overflow-hidden');
+}
+
+function showEnrollmentConfirmation(course) {
+    closeEnrollmentConfirmation();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'enrollmentConfirmationOverlay';
+    overlay.className = 'fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm';
+
+    const logoUrl = getCompanyLogoUrl();
+    const userName = currentUser?.name || '¡Felicitaciones!';
+    const userEmail = currentUser?.email || 'tu correo registrado';
+    const courseName = course?.name || 'este curso';
+
+    overlay.innerHTML = `
+        <div class="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl p-8 sm:p-10 text-center space-y-6">
+            <button type="button" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition" aria-label="Cerrar" data-close>
+                &times;
+            </button>
+            <div class="flex justify-center">
+                ${logoUrl
+                    ? `<img src="${logoUrl}" alt="Logo institucional" class="max-h-16 object-contain" loading="lazy">`
+                    : '<div class="w-16 h-16 rounded-full bg-accent flex items-center justify-center text-secondary font-bold text-xl">EITC</div>'}
+            </div>
+            <div class="space-y-3">
+                <h3 class="text-2xl font-extrabold text-secondary">¡Felicitaciones, ${userName}!</h3>
+                <p class="text-gray-700 text-base">Te acabas de inscribir al curso:</p>
+                <p class="text-xl font-bold text-primary">${courseName}</p>
+            </div>
+            <div class="bg-accent/10 border border-accent/20 rounded-2xl px-5 py-4 text-sm text-secondary">
+                <p class="font-semibold">Revisa tu bandeja.</p>
+                <p class="mt-1">Recibirás a tu correo <span class="font-bold">${userEmail}</span> más detalles de tu inscripción.</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200 px-5 py-4 bg-gray-50 text-sm text-gray-600">
+                <p>¿Tienes dudas? Llámanos al <span class="font-semibold text-secondary">+09 9999 9999</span> y resolveremos tus dudas.</p>
+            </div>
+            <div class="flex items-center justify-center gap-3">
+                <button type="button" class="px-5 py-2.5 rounded-full bg-primary text-white font-semibold shadow hover:bg-primary/90 transition" data-close>
+                    ¡Entendido!
+                </button>
+            </div>
+        </div>
+    `;
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay || event.target.closest('[data-close]')) {
+            closeEnrollmentConfirmation();
+        }
+    });
+
+    document.body.appendChild(overlay);
+    document.body.classList.add('overflow-hidden');
 }
 
 async function logout() {

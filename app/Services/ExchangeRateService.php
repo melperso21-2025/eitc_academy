@@ -89,10 +89,16 @@ class ExchangeRateService
      */
     public function getAllCachedRates()
     {
-        return ExchangeRate::where('expires_at', '>', now())
+        $cachedRates = ExchangeRate::where('expires_at', '>', now())
             ->get()
             ->mapWithKeys(fn($rate) => [$rate->to_currency => $rate->rate])
             ->toArray();
+
+        if (empty($cachedRates)) {
+            $cachedRates = $this->refreshAllRates();
+        }
+
+        return $cachedRates;
     }
 
     /**
@@ -150,10 +156,15 @@ class ExchangeRateService
     {
         $currencies = ['PEN', 'BRL', 'CLP', 'COP', 'ARS', 'UYU', 'BOB', 'VES', 'EUR', 'MXN'];
 
+        $refreshedRates = [];
+
         foreach ($currencies as $currency) {
-            $this->getRate($currency);
+            $rate = $this->getRate($currency);
+            if ($rate !== null) {
+                $refreshedRates[$currency] = $rate;
+            }
         }
 
-        return $this->getAllCachedRates();
+        return $refreshedRates;
     }
 }
