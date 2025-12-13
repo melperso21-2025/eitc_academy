@@ -7,12 +7,20 @@ const publicLogoImg = document.getElementById('publicLogo');
 const publicLogoWrapper = document.getElementById('publicLogoWrapper');
 const brandImageEl = document.getElementById('brandImage');
 const brandFallbackEl = document.getElementById('brandFallback');
+const courseSectionsContainer = document.getElementById('courseSectionsContainer');
+const searchInput = document.getElementById('searchFilter');
+const categorySelect = document.getElementById('categoryFilter');
+const levelSelect = document.getElementById('levelFilter');
 const DEFAULT_FALLBACK_COURSE_IMAGE = '/images/fallback-course.svg';
 let courseFallbackImageUrl = DEFAULT_FALLBACK_COURSE_IMAGE;
+const GRID_ITEMS_PER_PAGE = 15;
+let lastLoadedCourses = [];
+let activeCourseDetail = null;
+let editingCommentId = null;
 
 // ============= CARGAR CAMBIOS DE MONEDA =============
 let exchangeRates = {};
-let currentCourseFilters = {};
+let currentCourseFilters = getInitialFiltersFromQuery();
 
 async function loadExchangeRates() {
     try {
@@ -54,6 +62,182 @@ function formatPercent(value) {
     return `${numeric.toFixed(1)}%`;
 }
 
+function getInitialFiltersFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const pageParam = parseInt(params.get('page') || '1', 10);
+    const normalizedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+    return {
+        search: params.get('search') || '',
+        category: params.get('category') || '',
+        level: params.get('level') || '',
+        promotions: params.get('promotions') === '1',
+        favorites: params.get('favorites') === '1',
+        page: normalizedPage
+    };
+}
+
+function setFilterInputsFromState() {
+    if (searchInput) {
+        searchInput.value = currentCourseFilters.search || '';
+    }
+    if (levelSelect) {
+        levelSelect.value = currentCourseFilters.level || '';
+    }
+    if (categorySelect) {
+        categorySelect.value = currentCourseFilters.category || '';
+    }
+}
+
+function getFavoriteButtonConfig(isFavorite) {
+    const baseClasses = 'px-4 py-2 rounded font-semibold transition flex items-center gap-2';
+    const activeClasses = 'bg-rose-100 text-rose-600 hover:bg-rose-200';
+    const inactiveClasses = 'bg-gray-200 text-secondary hover:bg-gray-300';
+
+    return {
+        classes: `${baseClasses} ${isFavorite ? activeClasses : inactiveClasses}`,
+        icon: isFavorite ? '&#10084;' : '&#9825;',
+        label: isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'
+    };
+}
+
+function updateCourseDetailFavoriteState(isFavorite) {
+    if (activeCourseDetail) {
+        activeCourseDetail = { ...activeCourseDetail, is_favorite: isFavorite };
+    }
+
+    const favoriteButton = document.getElementById('favoriteToggleButton');
+    if (!favoriteButton) return;
+
+    const config = getFavoriteButtonConfig(isFavorite);
+    favoriteButton.className = config.classes;
+    favoriteButton.setAttribute('data-favorite', isFavorite ? '1' : '0');
+    favoriteButton.innerHTML = `<span aria-hidden="true">${config.icon}</span><span>${config.label}</span>`;
+}
+
+function updateCourseCardFavoriteState(courseId, isFavorite) {
+    const card = document.querySelector(`[data-course-id="${courseId}"]`);
+    if (!card) return;
+
+    let badge = card.querySelector('[data-favorite-badge]');
+
+    if (isFavorite) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'absolute top-3 right-3 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/90 shadow text-rose-500 text-lg pointer-events-none';
+            badge.innerHTML = '&#10084;';
+            badge.setAttribute('aria-hidden', 'true');
+            badge.title = 'Curso en favoritos';
+            card.appendChild(badge);
+        }
+        badge.dataset.favoriteBadge = courseId;
+    } else if (badge) {
+        badge.remove();
+    }
+}
+
+function updateCourseCardCommentCount(courseId, newCount) {
+    const badge = document.querySelector(`[data-comment-badge="${courseId}"]`);
+    if (!badge) return;
+
+    const safeCount = Number.isFinite(Number(newCount)) ? Number(newCount) : 0;
+    const label = `${safeCount} comentario${safeCount === 1 ? '' : 's'}`;
+    badge.innerHTML = `&#128172; <span class="text-secondary text-base font-bold">${safeCount}</span>`;
+    badge.setAttribute('aria-label', label);
+    badge.title = label;
+}
+
+function updateLocalCourseCommentCount(courseId, newCount) {
+    const countValue = Number.isFinite(Number(newCount)) ? Number(newCount) : 0;
+    const courseIndex = lastLoadedCourses.findIndex((course) => course.id === courseId);
+    if (courseIndex !== -1) {
+        lastLoadedCourses[courseIndex] = {
+            ...lastLoadedCourses[courseIndex],
+            comments_count: countValue
+        };
+    }
+}
+
+function updateCourseDetailCommentsHeader(newCount) {
+    const countValue = Number.isFinite(Number(newCount)) ? Number(newCount) : 0;
+    const countSpan = document.getElementById('commentCountValue');
+    if (countSpan) {
+        countSpan.textContent = countValue;
+    }
+}
+
+function resetCommentForm() {
+    editingCommentId = null;
+
+    const textarea = document.getElementById('commentText');
+    if (textarea) {
+        textarea.value = '';
+    }
+
+    const submitButton = document.getElementById('commentSubmitButton');
+    if (submitButton) {
+        submitButton.textContent = 'Comentar';
+    }
+
+    const cancelButton = document.getElementById('cancelCommentEditButton');
+    if (cancelButton) {
+        cancelButton.classList.add('hidden');
+    }
+}
+
+function startEditingComment(comment) {
+    if (!comment) return;
+
+    const textarea = document.getElementById('commentText');
+    const submitButton = document.getElementById('commentSubmitButton');
+    const cancelButton = document.getElementById('cancelCommentEditButton');
+
+    if (!textarea || !submitButton) return;
+
+    editingCommentId = comment.id;
+    textarea.value = comment.content || '';
+    textarea.focus();
+
+    submitButton.textContent = 'Guardar cambios';
+    if (cancelButton) {
+        cancelButton.classList.remove('hidden');
+    }
+}
+
+function cancelCommentEdit() {
+    resetCommentForm();
+}
+
+function updateQueryStringFromFilters(filters) {
+    const params = new URLSearchParams();
+
+    if (filters.search) {
+        params.set('search', filters.search);
+    }
+    if (filters.category) {
+        params.set('category', filters.category);
+    }
+    if (filters.level) {
+        params.set('level', filters.level);
+    }
+    if (filters.promotions) {
+        params.set('promotions', '1');
+    }
+    if (filters.favorites) {
+        params.set('favorites', '1');
+    }
+    if (Number(filters.page) > 1) {
+        params.set('page', String(filters.page));
+    }
+
+    const currentUrl = new URL(window.location.href);
+    const queryString = params.toString();
+    const newUrl = queryString
+        ? `${currentUrl.pathname}?${queryString}${currentUrl.hash}`
+        : `${currentUrl.pathname}${currentUrl.hash}`;
+
+    window.history.replaceState({}, '', newUrl);
+}
+
 function resolveCourseImage(rawUrl) {
     const fallbackImage = courseFallbackImageUrl || DEFAULT_FALLBACK_COURSE_IMAGE;
 
@@ -76,6 +260,9 @@ function openModal(modalId) {
 
 function closeModal(modalId) {
     document.getElementById(modalId + 'Modal').classList.add('hidden');
+    if (modalId === 'courseDetail') {
+        activeCourseDetail = null;
+    }
 }
 
 function switchModal(fromModal, toModal) {
@@ -291,79 +478,642 @@ document.getElementById('btnLogin').addEventListener('click', () => openModal('l
 document.getElementById('btnRegister').addEventListener('click', () => openModal('register'));
 
 // ============= CARGAR CURSOS =============
-async function loadCourses(filters = {}) {
-    currentCourseFilters = { ...filters };
+async function loadCourses(filters = currentCourseFilters) {
+    const requestedPage = parseInt(filters.page, 10);
+
+    currentCourseFilters = {
+        search: filters.search || '',
+        category: filters.category || '',
+        level: filters.level || '',
+        promotions: Boolean(filters.promotions),
+        favorites: Boolean(filters.favorites),
+        page: Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1
+    };
+
+    updateQueryStringFromFilters(currentCourseFilters);
+    setFilterInputsFromState();
     try {
         let url = '/courses';
         const params = new URLSearchParams();
 
-        if (filters.search) params.append('search', filters.search);
-        if (filters.category) params.append('category', filters.category);
-        if (filters.level) params.append('level', filters.level);
+        if (currentCourseFilters.search) params.append('search', currentCourseFilters.search);
+        if (currentCourseFilters.category) params.append('category', currentCourseFilters.category);
+        if (currentCourseFilters.level) params.append('level', currentCourseFilters.level);
+        params.append('per_page', '100');
 
         if (params.toString()) {
             url += '?' + params.toString();
         }
 
         const response = await fetchAPI(url);
-        const courses = response.data.data || response.data;
+        let courses = response.data.data || response.data;
 
-        const container = document.getElementById('cursosContainer');
-        container.innerHTML = '';
-
-        if (courses.length === 0) {
-            container.innerHTML = '<p class="col-span-3 text-center text-gray-600">No se encontraron cursos.</p>';
-            return;
+        if (currentCourseFilters.promotions) {
+            courses = courses.filter((course) => {
+                const priceValue = Number(course.price ?? 0);
+                const discountValue = Number(course.discount_amount ?? 0);
+                return discountValue > 0 && discountValue < priceValue;
+            });
         }
 
-        courses.forEach(course => {
-            const card = document.createElement('div');
-            card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer overflow-hidden flex flex-col';
-            card.onclick = () => showCourseDetail(course);
-            
-            const resolvedImageUrl = resolveCourseImage(course.image_url);
-            const fallbackImage = resolveCourseImage(null);
-            const courseImageHtml = `
-                <img src="${resolvedImageUrl}" alt="${course.name}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='${fallbackImage}';this.onerror=null;">
-            `;
-            const priceValue = Number(course.price ?? 0);
-            const discountValue = Number(course.discount_amount ?? 0);
-            const discountPercent = Number(course.discount_percent ?? 0);
-            const hasDiscount = discountValue > 0 && discountValue < priceValue;
-            const finalPrice = hasDiscount ? Math.max(priceValue - discountValue, 0) : priceValue;
-            const discountPercentLabel = formatPercent(discountPercent);
-            const priceSection = hasDiscount ? `
-                <div class="flex flex-col text-right">
-                    <span class="text-sm text-gray-500 line-through">${formatUSD(priceValue)}</span>
-                    <span class="text-xl font-bold text-emerald-600">${formatUSD(finalPrice)}</span>
-                    <span class="mt-1 inline-flex items-center justify-end text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">
-                        Ahorra ${formatUSD(discountValue)} · ${discountPercentLabel}
-                    </span>
-                </div>
-            ` : `<span class="text-xl font-bold text-secondary">${formatUSD(finalPrice)}</span>`;
-            
-            card.innerHTML = `
-                <div class="h-48 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
-                    ${courseImageHtml}
-                </div>
-                <div class="p-4 flex flex-col flex-1">
-                    <div class="space-y-2 flex-1">
-                        <h3 class="font-bold text-lg text-secondary leading-snug">${course.name}</h3>
-                        <p class="text-gray-600 text-sm line-clamp-3">${course.description}</p>
-                    </div>
-                    <div class="mt-4 flex items-center justify-between">
-                        <span class="inline-flex items-center text-xs font-semibold text-white bg-primary px-3 py-1 rounded-full uppercase tracking-wide">${course.level}</span>
-                        ${priceSection}
-                    </div>
-                </div>
-            `;
-            container.appendChild(card);
-        });
+        lastLoadedCourses = Array.isArray(courses) ? courses : [];
+        renderCourseSections(lastLoadedCourses);
 
     } catch (error) {
         console.error('Error al cargar cursos:', error);
         showNotification('Error al cargar cursos: ' + error.message, 'error');
     }
+}
+
+function buildPriceSection(course) {
+    const priceValue = Number(course.price ?? 0);
+    const discountValue = Number(course.discount_amount ?? 0);
+    const discountPercent = Number(course.discount_percent ?? 0);
+    const hasDiscount = discountValue > 0 && discountValue < priceValue;
+    const finalPrice = hasDiscount ? Math.max(priceValue - discountValue, 0) : priceValue;
+    const discountPercentLabel = formatPercent(discountPercent);
+    const basePriceClasses = hasDiscount ? 'opacity-100 visible' : 'opacity-0 invisible';
+    const priceColor = hasDiscount ? 'text-emerald-600' : 'text-secondary';
+    const savingsVisibility = hasDiscount ? '' : 'invisible';
+
+    return `
+        <div class="flex flex-col items-end text-right gap-1 min-h-[88px]">
+            <span class="text-sm text-gray-500 line-through ${basePriceClasses}">${formatUSD(priceValue)}</span>
+            <span class="text-xl font-bold ${priceColor}">${formatUSD(finalPrice)}</span>
+            <span class="inline-flex items-center justify-end text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full ${savingsVisibility}" aria-hidden="${hasDiscount ? 'false' : 'true'}">
+                Ahorra ${formatUSD(discountValue)} · ${discountPercentLabel}
+            </span>
+        </div>
+    `;
+}
+
+function isPromotionalCourse(course) {
+    const priceValue = Number(course?.price ?? 0);
+    const discountValue = Number(course?.discount_amount ?? 0);
+    return discountValue > 0 && discountValue < priceValue;
+}
+
+function sortCoursesByFavoritePriority(courses) {
+    const cloned = [...courses];
+    cloned.sort((a, b) => {
+        const priorityA = a.is_favorite ? 0 : (isPromotionalCourse(a) ? 1 : 2);
+        const priorityB = b.is_favorite ? 0 : (isPromotionalCourse(b) ? 1 : 2);
+
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB;
+        }
+
+        return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+    });
+
+    return cloned;
+}
+
+function createCourseCard(course, options = {}) {
+    const highlight = Boolean(options.highlight);
+    const layout = options.layout === 'grid' ? 'grid' : 'carousel';
+    const widthClasses = layout === 'grid' ? 'w-full' : 'min-w-[280px] max-w-[280px]';
+    const elevationClass = highlight ? 'ring-2 ring-gray-500 shadow-[0_25px_40px_-25px_rgba(17,24,39,0.6)]' : 'shadow';
+    const snapClass = layout === 'grid' ? '' : 'snap-start';
+
+    const card = document.createElement('article');
+    card.className = `${widthClasses} relative bg-white rounded-lg ${elevationClass} hover:shadow-xl transition cursor-pointer overflow-hidden flex flex-col ${snapClass}`.trim();
+    card.classList.add('h-full');
+    card.style.minHeight = '420px';
+    if (layout === 'carousel') {
+        card.style.height = '420px';
+    }
+    if (course?.id !== undefined) {
+        card.dataset.courseId = course.id;
+    }
+    card.tabIndex = 0;
+    card.setAttribute('role', 'listitem');
+    card.setAttribute('aria-label', course.name);
+
+    const resolvedImageUrl = resolveCourseImage(course.image_url);
+    const fallbackImage = resolveCourseImage(null);
+
+    card.innerHTML = `
+        <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
+            <img src="${resolvedImageUrl}" alt="${course.name}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='${fallbackImage}';this.onerror=null;">
+        </div>
+        <div class="p-4 flex flex-col flex-1">
+            <div class="space-y-2 flex-1">
+                <h3 class="font-bold text-lg text-secondary leading-tight">${course.name}</h3>
+                <p class="text-gray-600 text-sm line-clamp-3">${course.description}</p>
+            </div>
+            <div class="mt-4 flex items-center justify-between">
+                <span class="inline-flex items-center text-xs font-semibold text-white bg-primary px-3 py-1 rounded-full uppercase tracking-wide">${course.level}</span>
+                ${buildPriceSection(course)}
+            </div>
+        </div>
+    `;
+
+    if (course?.id !== undefined) {
+        const commentCount = Number(course?.comments_count ?? course?.commentsCount ?? 0);
+        const commentBadge = document.createElement('span');
+        commentBadge.className = 'absolute top-3 left-3 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/95 text-secondary text-sm font-semibold shadow pointer-events-none';
+        commentBadge.dataset.commentBadge = course.id;
+        commentBadge.innerHTML = `&#128172; <span class="text-secondary text-base font-bold">${commentCount}</span>`;
+        commentBadge.setAttribute('aria-label', `${commentCount} comentario${commentCount === 1 ? '' : 's'}`);
+        commentBadge.title = `${commentCount} comentario${commentCount === 1 ? '' : 's'}`;
+        card.appendChild(commentBadge);
+    }
+
+    if (course.is_favorite) {
+        const favoriteBadge = document.createElement('span');
+        favoriteBadge.className = 'absolute top-3 right-3 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/90 shadow text-rose-500 text-lg pointer-events-none';
+        favoriteBadge.innerHTML = '&#10084;';
+        favoriteBadge.dataset.favoriteBadge = course.id;
+        favoriteBadge.setAttribute('aria-hidden', 'true');
+        favoriteBadge.title = 'Curso en favoritos';
+        card.appendChild(favoriteBadge);
+    }
+
+    const openDetail = () => showCourseDetail(course);
+    card.addEventListener('click', openDetail);
+    card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openDetail();
+        }
+    });
+
+    return card;
+}
+
+function groupCoursesByCategory(courses) {
+    const groups = new Map();
+
+    courses.forEach((course) => {
+        const categoryName = course.category?.name || 'Otros cursos';
+        const categorySlug = course.category?.slug || slugify(categoryName);
+
+        if (!groups.has(categorySlug)) {
+            groups.set(categorySlug, {
+                title: categoryName,
+                slug: categorySlug,
+                courses: []
+            });
+        }
+
+        groups.get(categorySlug).courses.push(course);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => a.title.localeCompare(b.title, 'es'));
+}
+
+function hasActiveCourseFilters() {
+    return Boolean(
+        currentCourseFilters.promotions ||
+        currentCourseFilters.favorites ||
+        currentCourseFilters.category ||
+        currentCourseFilters.search ||
+        currentCourseFilters.level
+    );
+}
+
+function resolveFilteredCategoryName(courses) {
+    if (!currentCourseFilters.category) {
+        return '';
+    }
+
+    const matchingCourse = courses.find((course) => {
+        const courseSlug = course.category?.slug;
+        const courseId = course.category?.id;
+        const target = currentCourseFilters.category;
+        return courseSlug === target || String(courseId) === String(target);
+    });
+
+    if (matchingCourse?.category?.name) {
+        return matchingCourse.category.name;
+    }
+
+    return courses[0]?.category?.name || '';
+}
+
+function buildFilteredSectionTitle(courses) {
+    const parts = [];
+
+    if (currentCourseFilters.favorites) {
+        parts.push('Favoritos');
+    }
+
+    if (currentCourseFilters.promotions) {
+        parts.push('Promociones');
+    }
+
+    if (currentCourseFilters.category) {
+        const categoryName = resolveFilteredCategoryName(courses);
+        parts.push(categoryName ? `Categoría: ${categoryName}` : 'Categoría seleccionada');
+    }
+
+    if (currentCourseFilters.level) {
+        parts.push(`Nivel: ${currentCourseFilters.level}`);
+    }
+
+    if (currentCourseFilters.search) {
+        parts.push(`Coincidencias con "${currentCourseFilters.search}"`);
+    }
+
+    if (!parts.length) {
+        return 'Cursos filtrados';
+    }
+
+    if (
+        parts.length === 1 &&
+        currentCourseFilters.category &&
+        !currentCourseFilters.promotions &&
+        !currentCourseFilters.favorites &&
+        !currentCourseFilters.level &&
+        !currentCourseFilters.search
+    ) {
+        const categoryName = resolveFilteredCategoryName(courses);
+        return categoryName ? `Cursos de ${categoryName}` : 'Cursos de la categoría seleccionada';
+    }
+
+    if (
+        parts.length === 1 &&
+        currentCourseFilters.favorites &&
+        !currentCourseFilters.promotions &&
+        !currentCourseFilters.category &&
+        !currentCourseFilters.level &&
+        !currentCourseFilters.search
+    ) {
+        return 'Tus cursos favoritos';
+    }
+
+    return parts.join(' · ');
+}
+
+function getPaginationPageRange(totalPages, currentPage) {
+    if (totalPages <= 1) {
+        return [1];
+    }
+
+    const delta = 1;
+    const pages = new Set([1, totalPages]);
+    const start = Math.max(1, currentPage - delta);
+    const end = Math.min(totalPages, currentPage + delta);
+
+    for (let page = start; page <= end; page += 1) {
+        pages.add(page);
+    }
+
+    const sortedPages = Array.from(pages).sort((a, b) => a - b);
+    const range = [];
+    let lastPage = 0;
+
+    sortedPages.forEach((page) => {
+        if (lastPage) {
+            if (page - lastPage === 2) {
+                range.push(lastPage + 1);
+            } else if (page - lastPage > 2) {
+                range.push('ellipsis');
+            }
+        }
+
+        range.push(page);
+        lastPage = page;
+    });
+
+    return range;
+}
+
+function buildPaginationControls(totalPages, currentPage) {
+    const nav = document.createElement('nav');
+    nav.className = 'flex items-center justify-center gap-2 flex-wrap';
+    nav.setAttribute('aria-label', 'Paginación de cursos');
+
+    const createButton = (label, targetPage, { disabled = false, active = false, ariaLabel = '' } = {}) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.className = 'px-3 py-1 rounded border text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2';
+
+        if (ariaLabel) {
+            button.setAttribute('aria-label', ariaLabel);
+        }
+
+        if (active) {
+            button.classList.add('bg-primary', 'text-white', 'border-primary', 'cursor-default');
+            button.setAttribute('aria-current', 'page');
+        } else {
+            button.classList.add('bg-white', 'text-secondary', 'border-gray-300', 'hover:bg-gray-100');
+        }
+
+        if (disabled) {
+            button.classList.add('opacity-50', 'cursor-not-allowed');
+        } else if (!active) {
+            button.addEventListener('click', () => goToCoursePage(targetPage));
+        }
+
+        return button;
+    };
+
+    const createEllipsis = () => {
+        const span = document.createElement('span');
+        span.className = 'px-2 text-sm text-gray-500';
+        span.textContent = '...';
+        span.setAttribute('aria-hidden', 'true');
+        return span;
+    };
+
+    nav.appendChild(createButton('Anterior', currentPage - 1, {
+        disabled: currentPage <= 1,
+        ariaLabel: 'Página anterior'
+    }));
+
+    getPaginationPageRange(totalPages, currentPage).forEach((item) => {
+        if (item === 'ellipsis') {
+            nav.appendChild(createEllipsis());
+            return;
+        }
+
+        nav.appendChild(createButton(String(item), item, {
+            active: item === currentPage,
+            ariaLabel: `Página ${item}`
+        }));
+    });
+
+    nav.appendChild(createButton('Siguiente', currentPage + 1, {
+        disabled: currentPage >= totalPages,
+        ariaLabel: 'Página siguiente'
+    }));
+
+    return nav;
+}
+
+function goToCoursePage(targetPage) {
+    if (!Array.isArray(lastLoadedCourses) || lastLoadedCourses.length === 0) {
+        return;
+    }
+
+    if (!hasActiveCourseFilters()) {
+        return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(lastLoadedCourses.length / GRID_ITEMS_PER_PAGE));
+    const requestedPage = parseInt(targetPage, 10);
+    const nextPage = Math.min(Math.max(Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1, 1), totalPages);
+    const currentPage = parseInt(currentCourseFilters.page, 10) || 1;
+
+    if (nextPage === currentPage) {
+        return;
+    }
+
+    currentCourseFilters.page = nextPage;
+    updateQueryStringFromFilters(currentCourseFilters);
+    renderCourseSections(lastLoadedCourses);
+
+    const targetOffset = courseSectionsContainer?.offsetTop || 0;
+    window.scrollTo({ top: Math.max(0, targetOffset - 80), behavior: 'smooth' });
+}
+
+function renderCourseSections(courses) {
+    if (!courseSectionsContainer) return;
+
+    courseSectionsContainer.innerHTML = '';
+
+    if (!Array.isArray(courses) || courses.length === 0) {
+        courseSectionsContainer.innerHTML = '<p class="text-gray-600 text-center">No se encontraron cursos con los filtros seleccionados.</p>';
+        return;
+    }
+
+    const filteredView = hasActiveCourseFilters();
+
+    if (!filteredView && currentCourseFilters.page !== 1) {
+        currentCourseFilters.page = 1;
+        updateQueryStringFromFilters(currentCourseFilters);
+    }
+
+    if (filteredView) {
+        const filteredSection = document.createElement('section');
+        filteredSection.className = 'space-y-4';
+
+        const header = document.createElement('header');
+        header.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2';
+
+        const titleEl = document.createElement('h3');
+        titleEl.className = 'text-2xl font-bold text-secondary';
+        titleEl.textContent = buildFilteredSectionTitle(courses);
+        header.appendChild(titleEl);
+
+        const workingCourses = sortCoursesByFavoritePriority(courses);
+
+        const totalCourses = workingCourses.length;
+        const totalPages = Math.max(1, Math.ceil(totalCourses / GRID_ITEMS_PER_PAGE));
+        let page = parseInt(currentCourseFilters.page, 10);
+        if (!Number.isFinite(page) || page < 1) {
+            page = 1;
+        }
+        if (page > totalPages) {
+            page = totalPages;
+        }
+        if (page !== currentCourseFilters.page) {
+            currentCourseFilters.page = page;
+            updateQueryStringFromFilters(currentCourseFilters);
+        }
+
+        const startIndex = (page - 1) * GRID_ITEMS_PER_PAGE;
+        const paginatedCourses = workingCourses.slice(startIndex, startIndex + GRID_ITEMS_PER_PAGE);
+        const hasResults = paginatedCourses.length > 0;
+        const firstItemIndex = hasResults ? startIndex + 1 : 0;
+        const lastItemIndex = hasResults ? startIndex + paginatedCourses.length : 0;
+
+        const countEl = document.createElement('span');
+        countEl.className = 'text-sm text-gray-600';
+        countEl.textContent = hasResults
+            ? `Mostrando ${firstItemIndex}-${lastItemIndex} de ${totalCourses} curso${totalCourses === 1 ? '' : 's'}`
+            : `${totalCourses} curso${totalCourses === 1 ? '' : 's'}`;
+        header.appendChild(countEl);
+
+        filteredSection.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3';
+
+        paginatedCourses.forEach((course) => {
+            grid.appendChild(createCourseCard(course, {
+                layout: 'grid',
+                highlight: currentCourseFilters.promotions
+            }));
+        });
+
+        filteredSection.appendChild(grid);
+        if (totalPages > 1) {
+            filteredSection.appendChild(buildPaginationControls(totalPages, page));
+        }
+        courseSectionsContainer.appendChild(filteredSection);
+        return;
+    }
+
+    const favoriteCourses = courses.filter((course) => Boolean(course.is_favorite));
+    const favoriteIds = new Set(favoriteCourses.map((course) => course.id));
+
+    if (favoriteCourses.length > 0) {
+        courseSectionsContainer.appendChild(
+            buildCarouselSection('Favoritos', favoriteCourses, {
+                sectionId: 'favoritos',
+                highlightCards: true,
+                viewAllParams: { favorites: true }
+            })
+        );
+    }
+
+    const promotionalCourses = courses.filter((course) => {
+        return !favoriteIds.has(course.id) && isPromotionalCourse(course);
+    });
+
+    if (promotionalCourses.length > 0) {
+        courseSectionsContainer.appendChild(
+            buildCarouselSection('Promociones', promotionalCourses, {
+                sectionId: 'promociones',
+                highlightCards: true,
+                viewAllParams: { promotions: true }
+            })
+        );
+    }
+
+    const remainingCourses = courses.filter((course) => {
+        return !favoriteIds.has(course.id) && !isPromotionalCourse(course);
+    });
+
+    if (remainingCourses.length > 0) {
+        const groupedCategories = groupCoursesByCategory(remainingCourses);
+
+        groupedCategories.forEach((group) => {
+            courseSectionsContainer.appendChild(
+                buildCarouselSection(group.title, group.courses, {
+                    sectionId: group.slug,
+                    viewAllParams: { category: group.slug }
+                })
+            );
+        });
+    }
+}
+
+function buildCarouselSection(title, courses, options = {}) {
+    const section = document.createElement('section');
+    section.className = 'space-y-4';
+
+    const sectionId = `carousel-${options.sectionId || slugify(title)}`;
+    const highlightCards = options.highlightCards || false;
+    const showControls = courses.length > 3;
+
+    const header = document.createElement('header');
+    header.className = 'flex items-center justify-between';
+
+    const titleEl = document.createElement('h3');
+    titleEl.className = 'text-2xl font-bold text-secondary';
+    titleEl.textContent = title;
+    header.appendChild(titleEl);
+
+    if (showControls) {
+        const controlsWrapper = document.createElement('div');
+        controlsWrapper.className = 'hidden sm:flex items-center space-x-2';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.className = 'p-2 rounded-full bg-gray-200 text-secondary hover:bg-gray-300 transition';
+        prevBtn.innerHTML = '&#8592;';
+        prevBtn.addEventListener('click', () => scrollCarousel(sectionId, -1));
+
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.className = 'p-2 rounded-full bg-gray-200 text-secondary hover:bg-gray-300 transition';
+        nextBtn.innerHTML = '&#8594;';
+        nextBtn.addEventListener('click', () => scrollCarousel(sectionId, 1));
+
+        controlsWrapper.appendChild(prevBtn);
+        controlsWrapper.appendChild(nextBtn);
+        header.appendChild(controlsWrapper);
+    }
+
+    section.appendChild(header);
+
+    const carouselWrapper = document.createElement('div');
+    carouselWrapper.className = 'relative';
+
+    const track = document.createElement('div');
+    track.id = sectionId;
+    track.className = 'flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2';
+    track.setAttribute('role', 'list');
+    track.setAttribute('aria-label', title);
+
+    courses.forEach((course) => {
+        track.appendChild(createCourseCard(course, { highlight: highlightCards }));
+    });
+
+    carouselWrapper.appendChild(track);
+
+    if (showControls) {
+        const prevOverlay = document.createElement('button');
+        prevOverlay.type = 'button';
+        prevOverlay.className = 'hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white shadow border hover:bg-gray-100 transition';
+        prevOverlay.innerHTML = '&#8592;';
+        prevOverlay.addEventListener('click', () => scrollCarousel(sectionId, -1));
+
+        const nextOverlay = document.createElement('button');
+        nextOverlay.type = 'button';
+        nextOverlay.className = 'hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white shadow border hover:bg-gray-100 transition';
+        nextOverlay.innerHTML = '&#8594;';
+        nextOverlay.addEventListener('click', () => scrollCarousel(sectionId, 1));
+
+        carouselWrapper.appendChild(prevOverlay);
+        carouselWrapper.appendChild(nextOverlay);
+    }
+
+    section.appendChild(carouselWrapper);
+
+    const footer = document.createElement('div');
+    footer.className = 'flex justify-end';
+
+    const viewAllBtn = document.createElement('button');
+    viewAllBtn.type = 'button';
+    viewAllBtn.className = 'text-sm font-semibold text-primary hover:underline flex items-center space-x-1';
+    viewAllBtn.innerHTML = '<span>Ver todos</span><span aria-hidden="true">&#8594;</span>';
+    viewAllBtn.addEventListener('click', () => openCourseCollectionView(options.viewAllParams || {}));
+
+    footer.appendChild(viewAllBtn);
+    section.appendChild(footer);
+
+    return section;
+}
+
+function scrollCarousel(trackId, direction) {
+    const track = document.getElementById(trackId);
+    if (!track) return;
+
+    const scrollAmount = track.clientWidth * 0.85;
+    track.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+}
+
+function openCourseCollectionView(params = {}) {
+    const nextFilters = {
+        search: params.search || '',
+        category: params.category || '',
+        level: params.level || '',
+        promotions: Boolean(params.promotions),
+        favorites: Boolean(params.favorites),
+        page: 1
+    };
+
+    loadCourses(nextFilters);
+
+    const targetOffset = courseSectionsContainer?.offsetTop || 0;
+    window.scrollTo({ top: Math.max(0, targetOffset - 80), behavior: 'smooth' });
+}
+
+function slugify(text) {
+    return (text || '')
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        || 'categoria';
 }
 
 // ============= CARGAR CATEGORÍAS =============
@@ -395,19 +1145,25 @@ async function loadCategories() {
 // ============= FILTRADO DE CURSOS =============
 function collectFilterValues() {
     return {
-        search: document.getElementById('searchFilter')?.value?.trim() || '',
-        category: document.getElementById('categoryFilter')?.value || '',
-        level: document.getElementById('levelFilter')?.value || ''
+        search: searchInput?.value?.trim() || '',
+        category: categorySelect?.value || '',
+        level: levelSelect?.value || ''
     };
 }
 
 function applyCourseFilters() {
-    loadCourses(collectFilterValues());
+    const nextFilters = {
+        ...collectFilterValues(),
+        promotions: currentCourseFilters.promotions || false,
+        favorites: currentCourseFilters.favorites || false,
+        page: 1
+    };
+
+    loadCourses(nextFilters);
 }
 
 document.getElementById('btnFilter').addEventListener('click', applyCourseFilters);
 
-const searchInput = document.getElementById('searchFilter');
 if (searchInput) {
     searchInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
@@ -417,15 +1173,15 @@ if (searchInput) {
     });
 }
 
-const categorySelect = document.getElementById('categoryFilter');
 if (categorySelect) {
     categorySelect.addEventListener('change', applyCourseFilters);
 }
 
-const levelSelect = document.getElementById('levelFilter');
 if (levelSelect) {
     levelSelect.addEventListener('change', applyCourseFilters);
 }
+
+setFilterInputsFromState();
 
 const clearFiltersButton = document.getElementById('btnClearFilters');
 function clearCourseFilters() {
@@ -438,6 +1194,9 @@ function clearCourseFilters() {
     if (levelSelect) {
         levelSelect.value = '';
     }
+    currentCourseFilters.promotions = false;
+    currentCourseFilters.favorites = false;
+    currentCourseFilters.page = 1;
     applyCourseFilters();
 }
 
@@ -448,6 +1207,7 @@ if (clearFiltersButton) {
 // ============= DETALLE DEL CURSO =============
 async function showCourseDetail(course) {
     openModal('courseDetail');
+    activeCourseDetail = { ...course };
     
     const contentDiv = document.getElementById('courseDetailContent');
     const priceValue = Number(course.price ?? 0);
@@ -459,8 +1219,9 @@ async function showCourseDetail(course) {
     const finalPricePen = convertCurrency(finalPrice, 'PEN');
     const basePricePen = convertCurrency(priceValue, 'PEN');
     
-    const isFavorited = currentUser ? true : false; // Verificar después
-    const isEnrolled = currentUser ? true : false; // Verificar después
+    const isFavorited = Boolean(course.is_favorite);
+    const isEnrolled = Boolean(course.is_enrolled);
+    const favoriteButtonConfig = getFavoriteButtonConfig(isFavorited);
 
     contentDiv.innerHTML = `
         <div class="space-y-4">
@@ -497,7 +1258,7 @@ async function showCourseDetail(course) {
 
             <!-- Sección de Comentarios -->
             <div class="border-t pt-4">
-                <h3 class="font-bold text-secondary mb-4">Comentarios (${course.comments_count || 0})</h3>
+                <h3 class="font-bold text-secondary mb-4">Comentarios (<span id="commentCountValue">${course.comments_count || 0}</span>)</h3>
                 <div id="commentsList" class="space-y-3 mb-4 max-h-48 overflow-y-auto">
                     <!-- Los comentarios se cargarán aquí -->
                 </div>
@@ -505,9 +1266,14 @@ async function showCourseDetail(course) {
                 ${currentUser ? `
                     <form id="commentForm" class="space-y-2">
                         <textarea id="commentText" placeholder="Escribe tu comentario (máx 200 caracteres)..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary text-sm" maxlength="200" required></textarea>
-                        <button type="submit" onclick="submitComment(event, ${course.id})" class="px-4 py-2 bg-accent text-secondary rounded text-sm font-bold hover:bg-opacity-90 transition">
-                            Comentar
-                        </button>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button type="submit" id="commentSubmitButton" class="px-4 py-2 bg-accent text-secondary rounded text-sm font-bold hover:bg-opacity-90 transition">
+                                Comentar
+                            </button>
+                            <button type="button" id="cancelCommentEditButton" class="px-4 py-2 text-secondary border border-gray-300 rounded text-sm font-semibold hover:bg-gray-100 transition hidden">
+                                Cancelar
+                            </button>
+                        </div>
                     </form>
                 ` : `
                     <p class="text-gray-600 text-sm">Inicia sesión para comentar</p>
@@ -532,8 +1298,9 @@ async function showCourseDetail(course) {
                         <button class="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90" onclick="enrollCourse(${course.id})">
                             Inscribirse
                         </button>
-                        <button class="px-4 py-2 bg-gray-300 text-secondary rounded hover:bg-gray-400" onclick="toggleFavorite(${course.id})">
-                            ❤️ Favorito
+                        <button id="favoriteToggleButton" type="button" class="${favoriteButtonConfig.classes}" data-course-id="${course.id}" data-favorite="${isFavorited ? '1' : '0'}" onclick="toggleFavorite(${course.id})">
+                            <span aria-hidden="true">${favoriteButtonConfig.icon}</span>
+                            <span>${favoriteButtonConfig.label}</span>
                         </button>
                     ` : `
                         <button class="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90" onclick="openModal('login')">
@@ -544,7 +1311,18 @@ async function showCourseDetail(course) {
             </div>
         </div>
     `;
-    
+    const commentForm = document.getElementById('commentForm');
+    if (commentForm) {
+        commentForm.addEventListener('submit', (event) => submitComment(event, course.id));
+    }
+
+    const cancelEditButton = document.getElementById('cancelCommentEditButton');
+    if (cancelEditButton) {
+        cancelEditButton.addEventListener('click', cancelCommentEdit);
+    }
+
+    resetCommentForm();
+
     // Cargar comentarios
     loadComments(course.id);
 }
@@ -552,34 +1330,100 @@ async function showCourseDetail(course) {
 async function loadComments(courseId) {
     try {
         const response = await fetchAPI(`/comments/${courseId}`);
-        const comments = (response.data && response.data.data) || response.data || [];
-        
+        const payload = response?.data;
+        let comments = [];
+        let totalCount = 0;
+
+        if (payload && Array.isArray(payload.data)) {
+            comments = payload.data;
+            totalCount = Number(payload.total ?? payload.data.length ?? 0);
+        } else if (Array.isArray(payload)) {
+            comments = payload;
+            totalCount = comments.length;
+        } else if (Array.isArray(response)) {
+            comments = response;
+            totalCount = comments.length;
+        }
+
+        if (!Array.isArray(comments)) {
+            comments = [];
+        }
+
+        if (!Number.isFinite(totalCount)) {
+            totalCount = comments.length;
+        }
+
         const container = document.getElementById('commentsList');
         if (!container) return;
-        
+
         container.innerHTML = '';
-        
+
         if (comments.length === 0) {
             container.innerHTML = '<p class="text-gray-600 text-sm">No hay comentarios aún. ¡Sé el primero!</p>';
-            return;
+        } else {
+            comments.forEach((comment) => {
+                const safeContent = typeof comment.content === 'string' ? comment.content : '';
+                const commentDiv = document.createElement('div');
+                commentDiv.className = 'bg-gray-50 p-3 rounded text-sm space-y-2';
+
+                const header = document.createElement('div');
+                header.className = 'flex justify-between items-start gap-2';
+
+                const author = document.createElement('p');
+                author.className = 'font-bold text-secondary';
+                author.textContent = comment?.user?.name || 'Usuario';
+                header.appendChild(author);
+
+                const canEdit = currentUser && currentUser.id === comment.user_id;
+                const canDelete = currentUser && (currentUser.id === comment.user_id || currentUser.role === 'admin');
+
+                if (canEdit || canDelete) {
+                    const actions = document.createElement('div');
+                    actions.className = 'flex items-center gap-2';
+
+                    if (canEdit) {
+                        const editButton = document.createElement('button');
+                        editButton.type = 'button';
+                        editButton.className = 'text-primary hover:underline text-xs font-semibold';
+                        editButton.textContent = 'Editar';
+                        editButton.addEventListener('click', () => startEditingComment({ id: comment.id, content: safeContent }));
+                        actions.appendChild(editButton);
+                    }
+
+                    if (canDelete) {
+                        const deleteButton = document.createElement('button');
+                        deleteButton.type = 'button';
+                        deleteButton.className = 'text-red-600 hover:underline text-xs font-semibold';
+                        deleteButton.textContent = 'Eliminar';
+                        deleteButton.addEventListener('click', () => deleteComment(comment.id, courseId));
+                        actions.appendChild(deleteButton);
+                    }
+
+                    header.appendChild(actions);
+                }
+
+                commentDiv.appendChild(header);
+
+                const body = document.createElement('p');
+                body.className = 'text-gray-700';
+                body.textContent = safeContent;
+                commentDiv.appendChild(body);
+
+                container.appendChild(commentDiv);
+            });
         }
-        
-        comments.forEach(comment => {
-            const commentDiv = document.createElement('div');
-            commentDiv.className = 'bg-gray-50 p-3 rounded text-sm';
-            commentDiv.innerHTML = `
-                <div class="flex justify-between">
-                    <p class="font-bold text-secondary">${comment.user.name}</p>
-                    ${currentUser && (currentUser.id === comment.user_id || currentUser.role === 'admin') ? `
-                        <button onclick="deleteComment(${comment.id})" class="text-red-600 hover:underline text-xs">
-                            Eliminar
-                        </button>
-                    ` : ''}
-                </div>
-                <p class="text-gray-700">${comment.content}</p>
-            `;
-            container.appendChild(commentDiv);
-        });
+
+        if (editingCommentId && !comments.some((item) => item.id === editingCommentId)) {
+            cancelCommentEdit();
+        }
+
+        updateCourseDetailCommentsHeader(totalCount);
+        updateLocalCourseCommentCount(courseId, totalCount);
+        updateCourseCardCommentCount(courseId, totalCount);
+
+        if (activeCourseDetail?.id === courseId) {
+            activeCourseDetail = { ...activeCourseDetail, comments_count: totalCount };
+        }
     } catch (error) {
         console.error('Error al cargar comentarios:', error);
     }
@@ -613,12 +1457,35 @@ async function toggleFavorite(courseId) {
     }
 
     try {
-        await fetchAPI('/favorites', {
+        const response = await fetchAPI('/favorites', {
             method: 'POST',
             body: JSON.stringify({ course_id: courseId })
         });
 
-        showNotification('Favorito agregado/removido correctamente');
+        const courseIndex = lastLoadedCourses.findIndex((course) => course.id === courseId);
+        const prevFavoriteState = courseIndex !== -1
+            ? Boolean(lastLoadedCourses[courseIndex].is_favorite)
+            : Boolean(activeCourseDetail?.is_favorite);
+        const responseFavoriteState = response?.is_favorite;
+        const newFavoriteState = typeof responseFavoriteState === 'boolean' ? responseFavoriteState : !prevFavoriteState;
+        const feedbackMessage = response.message || (newFavoriteState ? 'Curso agregado a favoritos' : 'Curso removido de favoritos');
+
+        updateCourseDetailFavoriteState(newFavoriteState);
+        if (courseIndex !== -1) {
+            lastLoadedCourses[courseIndex] = {
+                ...lastLoadedCourses[courseIndex],
+                is_favorite: newFavoriteState
+            };
+        }
+
+        if (activeCourseDetail?.id === courseId) {
+            activeCourseDetail = { ...activeCourseDetail, is_favorite: newFavoriteState };
+        }
+
+        updateCourseCardFavoriteState(courseId, newFavoriteState);
+        renderCourseSections(lastLoadedCourses);
+
+        showNotification(feedbackMessage);
         
     } catch (error) {
         showNotification('Error al agregar favorito: ' + error.message, 'error');
@@ -633,24 +1500,40 @@ async function submitComment(event, courseId) {
         return;
     }
 
-    const content = document.getElementById('commentText').value;
+    const textarea = document.getElementById('commentText');
+    if (!textarea) return;
+
+    const content = (textarea.value || '').trim();
+    if (!content) {
+        showNotification('El comentario no puede estar vacío', 'error');
+        return;
+    }
+
+    const isEditing = Boolean(editingCommentId);
+    const endpoint = isEditing ? `/comments/${editingCommentId}` : '/comments';
+    const method = isEditing ? 'PUT' : 'POST';
+    const payload = isEditing
+        ? { content }
+        : { course_id: courseId, content };
 
     try {
-        await fetchAPI('/comments', {
-            method: 'POST',
-            body: JSON.stringify({ course_id: courseId, content })
+        const response = await fetchAPI(endpoint, {
+            method,
+            body: JSON.stringify(payload)
         });
 
-        document.getElementById('commentText').value = '';
-        showNotification('Comentario agregado correctamente');
-        loadComments(courseId);
+        const message = response?.message || (isEditing ? 'Comentario actualizado correctamente' : 'Comentario agregado correctamente');
+
+        resetCommentForm();
+        await loadComments(courseId);
+        showNotification(message);
         
     } catch (error) {
-        showNotification('Error al agregar comentario: ' + error.message, 'error');
+        showNotification('Error al guardar comentario: ' + error.message, 'error');
     }
 }
 
-async function deleteComment(commentId) {
+async function deleteComment(commentId, courseId = null) {
     if (!confirm('¿Deseas eliminar este comentario?')) {
         return;
     }
@@ -660,12 +1543,19 @@ async function deleteComment(commentId) {
             method: 'DELETE'
         });
 
+        if (editingCommentId === commentId) {
+            cancelCommentEdit();
+        }
+
+        const targetCourseId = courseId || activeCourseDetail?.id;
+        if (targetCourseId) {
+            await loadComments(targetCourseId);
+        }
+
         showNotification('Comentario eliminado');
-        // Recargar comentarios del curso actual
-        // Aquí sería ideal pasar el courseId, pero por ahora recargamos el modal
         
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showNotification('Error al eliminar comentario: ' + error.message, 'error');
     }
 }
 

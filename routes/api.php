@@ -64,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Comentarios
     Route::post('/comments', [CommentController::class, 'store']);
+    Route::put('/comments/{comment}', [CommentController::class, 'update']);
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
 
     // Enrollments (Inscripciones)

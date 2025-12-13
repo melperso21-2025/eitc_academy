@@ -60,6 +60,36 @@ class CommentController extends Controller
     }
 
     /**
+     * PUT /api/comments/{id}
+     * Actualizar comentario (solo autor o admin)
+     */
+    public function update(Request $request, Comment $comment)
+    {
+        if ($request->user()->id !== $comment->user_id && $request->user()->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autorizado',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'content' => 'required|string|max:200',
+        ]);
+
+        $comment->update([
+            'content' => $validated['content'],
+        ]);
+
+        $comment->load('user:id,name,email');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comentario actualizado correctamente',
+            'data' => $comment,
+        ]);
+    }
+
+    /**
      * DELETE /api/comments/{id}
      * Eliminar comentario (solo autor o admin)
      */

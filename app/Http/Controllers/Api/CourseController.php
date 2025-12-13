@@ -29,7 +29,20 @@ class CourseController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Course::with('category');
+        $query = Course::with('category')
+            ->withCount('comments');
+
+        $favoriteCourseMap = [];
+        $authenticatedUser = auth('sanctum')->user();
+        if ($authenticatedUser) {
+            $favoriteCourseMap = array_fill_keys(
+                $authenticatedUser
+                    ->favorites()
+                    ->pluck('course_id')
+                    ->all(),
+                true
+            );
+        }
 
         // Filtrar por categoría
         if ($request->has('category')) {
@@ -76,6 +89,11 @@ class CourseController extends Controller
         if ($isAdmin) {
             $courses = $query->orderByDesc('created_at')->get();
 
+            $courses->transform(function ($course) use ($favoriteCourseMap) {
+                $course->setAttribute('is_favorite', isset($favoriteCourseMap[$course->id]));
+                return $course;
+            });
+
             return response()->json([
                 'success' => true,
                 'data' => $courses,
@@ -88,6 +106,10 @@ class CourseController extends Controller
         }
 
         $courses = $query->paginate($perPage);
+        $courses->getCollection()->transform(function ($course) use ($favoriteCourseMap) {
+            $course->setAttribute('is_favorite', isset($favoriteCourseMap[$course->id]));
+            return $course;
+        });
 
         return response()->json([
             'success' => true,
