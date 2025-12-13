@@ -1,7 +1,12 @@
 // ============= CONFIGURACIÓN GLOBAL =============
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'http://127.0.0.1:8000/api';
 let authToken = localStorage.getItem('authToken') || null;
 let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+const publicLogoImg = document.getElementById('publicLogo');
+const publicLogoWrapper = document.getElementById('publicLogoWrapper');
+const brandImageEl = document.getElementById('brandImage');
+const brandFallbackEl = document.getElementById('brandFallback');
 
 // ============= CARGAR CAMBIOS DE MONEDA =============
 let exchangeRates = {};
@@ -22,8 +27,28 @@ async function loadExchangeRates() {
 }
 
 function convertCurrency(amount, toCurrency = 'PEN') {
-    if (!exchangeRates[toCurrency]) return amount;
-    return (amount * exchangeRates[toCurrency]).toFixed(2);
+    const numericAmount = Number(amount) || 0;
+    const rate = exchangeRates[toCurrency];
+    if (!rate) return numericAmount.toFixed(2);
+    return (numericAmount * rate).toFixed(2);
+}
+
+function formatUSD(amount) {
+    if (amount === null || amount === undefined || Number.isNaN(Number(amount))) {
+        return '$0.00';
+    }
+    return `$${Number(amount).toFixed(2)}`;
+}
+
+function formatPercent(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+        return '0%';
+    }
+    if (Number.isInteger(numeric)) {
+        return `${numeric}%`;
+    }
+    return `${numeric.toFixed(1)}%`;
 }
 
 // ============= UTILIDADES =============
@@ -80,6 +105,72 @@ async function fetchAPI(endpoint, options = {}) {
     } catch (error) {
         console.error('API Error:', error);
         throw error;
+    }
+}
+
+// ============= ACTIVOS CORPORATIVOS =============
+function getCacheSafeUrl(url) {
+    if (!url) return '';
+    return url.includes('?') ? `${url}&cb=${Date.now()}` : `${url}?cb=${Date.now()}`;
+}
+
+function selectAssetByType(assets, type) {
+    if (!Array.isArray(assets)) return null;
+
+    const filtered = assets
+        .filter((asset) => asset?.type === type && asset?.image_url)
+        .sort((a, b) => {
+            const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+            if (orderDiff !== 0) return orderDiff;
+            return (b.id ?? 0) - (a.id ?? 0);
+        });
+
+    return filtered.length ? filtered[0] : null;
+}
+
+function applyCompanyLogo(logoAsset) {
+    if (!publicLogoImg || !publicLogoWrapper) return;
+
+    if (logoAsset) {
+        publicLogoImg.src = getCacheSafeUrl(logoAsset.image_url);
+        publicLogoImg.alt = logoAsset.title || 'Logo principal';
+        publicLogoImg.classList.remove('hidden');
+        publicLogoWrapper.classList.remove('bg-gray-200');
+        publicLogoWrapper.classList.add('bg-accent');
+    } else {
+        publicLogoImg.src = '';
+        publicLogoImg.alt = 'Logo principal';
+        publicLogoImg.classList.add('hidden');
+        publicLogoWrapper.classList.add('bg-accent');
+    }
+}
+
+function applyBrandImage(brandAsset) {
+    if (!brandImageEl || !brandFallbackEl) return;
+
+    if (brandAsset) {
+        brandImageEl.src = getCacheSafeUrl(brandAsset.image_url);
+        brandImageEl.alt = brandAsset.title || 'Marca institucional';
+        brandImageEl.classList.remove('hidden');
+        brandFallbackEl.classList.add('hidden');
+    } else {
+        brandImageEl.src = '';
+        brandImageEl.alt = 'Marca institucional';
+        brandImageEl.classList.add('hidden');
+        brandFallbackEl.classList.remove('hidden');
+    }
+}
+
+async function loadCompanyAssetsPublic() {
+    try {
+        const response = await fetchAPI('/company-assets');
+        const assets = response.data || [];
+        applyCompanyLogo(selectAssetByType(assets, 'logo'));
+        applyBrandImage(selectAssetByType(assets, 'brand'));
+    } catch (error) {
+        console.error('Error al cargar assets corporativos:', error);
+        applyCompanyLogo(null);
+        applyBrandImage(null);
     }
 }
 
@@ -193,6 +284,21 @@ async function loadCourses(filters = {}) {
             
             // Agregar timestamp a la URL para evitar caché
             const imageUrl = course.image_url ? (course.image_url.includes('?') ? course.image_url + '&t=' + Date.now() : course.image_url + '?t=' + Date.now()) : '';
+            const priceValue = Number(course.price ?? 0);
+            const discountValue = Number(course.discount_amount ?? 0);
+            const discountPercent = Number(course.discount_percent ?? 0);
+            const hasDiscount = discountValue > 0 && discountValue < priceValue;
+            const finalPrice = hasDiscount ? Math.max(priceValue - discountValue, 0) : priceValue;
+            const discountPercentLabel = formatPercent(discountPercent);
+            const priceSection = hasDiscount ? `
+                <div class="flex flex-col text-right">
+                    <span class="text-sm text-gray-500 line-through">${formatUSD(priceValue)}</span>
+                    <span class="text-xl font-bold text-emerald-600">${formatUSD(finalPrice)}</span>
+                    <span class="mt-1 inline-flex items-center justify-end text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">
+                        Ahorra ${formatUSD(discountValue)} · ${discountPercentLabel}
+                    </span>
+                </div>
+            ` : `<span class="text-xl font-bold text-secondary">${formatUSD(finalPrice)}</span>`;
             
             card.innerHTML = `
                 <div class="h-48 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
@@ -201,9 +307,9 @@ async function loadCourses(filters = {}) {
                 <div class="p-4">
                     <h3 class="font-bold text-lg text-secondary mb-2">${course.name}</h3>
                     <p class="text-gray-600 text-sm mb-3 line-clamp-2">${course.description}</p>
-                    <div class="flex justify-between items-center">
-                        <span class="text-accent font-bold text-lg">S/. ${course.price}</span>
+                    <div class="flex justify-between items-start">
                         <span class="text-xs bg-primary text-white px-2 py-1 rounded">${course.level}</span>
+                        ${priceSection}
                     </div>
                 </div>
             `;
@@ -249,7 +355,14 @@ async function showCourseDetail(course) {
     openModal('courseDetail');
     
     const contentDiv = document.getElementById('courseDetailContent');
-    const precioConvertido = convertCurrency(course.price, 'PEN');
+    const priceValue = Number(course.price ?? 0);
+    const discountValue = Number(course.discount_amount ?? 0);
+    const discountPercent = Number(course.discount_percent ?? 0);
+    const hasDiscount = discountValue > 0 && discountValue < priceValue;
+    const finalPrice = hasDiscount ? Math.max(priceValue - discountValue, 0) : priceValue;
+    const discountPercentLabel = formatPercent(discountPercent);
+    const finalPricePen = convertCurrency(finalPrice, 'PEN');
+    const basePricePen = convertCurrency(priceValue, 'PEN');
     
     const isFavorited = currentUser ? true : false; // Verificar después
     const isEnrolled = currentUser ? true : false; // Verificar después
@@ -306,10 +419,18 @@ async function showCourseDetail(course) {
                 `}
             </div>
 
-            <div class="border-t pt-4 flex justify-between items-center">
-                <div>
-                    <span class="text-3xl font-bold text-accent">S/. ${course.price}</span>
-                    <p class="text-xs text-gray-600">≈ ${precioConvertido} PEN</p>
+            <div class="border-t pt-4 flex justify-between items-start gap-4">
+                <div class="space-y-2">
+                    ${hasDiscount ? `
+                        <p class="text-sm text-gray-500 line-through">${formatUSD(priceValue)} · ≈ ${basePricePen} PEN</p>
+                    ` : ''}
+                    <p class="text-3xl font-bold text-emerald-600">${formatUSD(finalPrice)}</p>
+                    <p class="text-xs text-gray-600">≈ ${finalPricePen} PEN</p>
+                    ${hasDiscount ? `
+                        <span class="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
+                            Ahorra ${formatUSD(discountValue)} · ${discountPercentLabel} menos
+                        </span>
+                    ` : ''}
                 </div>
                 <div class="space-x-2">
                     ${currentUser ? `
@@ -525,4 +646,5 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCategories();
     loadExchangeRates();
     loadCourses();
+    loadCompanyAssetsPublic();
 });

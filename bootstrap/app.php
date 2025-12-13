@@ -10,6 +10,7 @@ if (env('APP_ENV') === 'local' && strtolower(PHP_OS_FAMILY) === 'windows') {
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,8 +20,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->web(\Illuminate\Http\Middleware\HandleCors::class);
+        // Sin middleware especial - Laravel 11 maneja automáticamente
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Manejar excepciones de autenticación
+        $exceptions->renderable(function (\Illuminate\Auth\AuthenticationException $e, $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autorizado',
+                ], 401);
+            }
+        });
     })->create();

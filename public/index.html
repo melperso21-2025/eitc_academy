@@ -25,7 +25,9 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 bg-accent rounded-lg"></div>
+                    <div id="publicLogoWrapper" class="w-8 h-8 bg-accent rounded-lg overflow-hidden flex items-center justify-center">
+                        <img id="publicLogo" src="" alt="Logo principal" class="w-full h-full object-cover hidden">
+                    </div>
                     <span class="font-bold text-xl">EITC Academy</span>
                 </div>
                 <div class="hidden md:flex space-x-6">
@@ -50,8 +52,9 @@
                     <button class="bg-accent text-secondary px-6 py-3 rounded font-bold hover:bg-opacity-90 transition w-fit">Explorar Cursos</button>
                 </div>
                 <div class="flex items-center justify-center">
-                    <div class="w-full h-80 bg-white bg-opacity-10 rounded-lg flex items-center justify-center">
-                        <div class="text-center">
+                    <div id="brandImageContainer" class="w-full h-80 bg-white bg-opacity-10 rounded-lg flex items-center justify-center overflow-hidden relative">
+                        <img id="brandImage" src="" alt="Marca institucional" class="w-full h-full object-cover hidden">
+                        <div id="brandFallback" class="text-center">
                             <div class="text-6xl mb-4">⚡</div>
                             <p class="text-lg">Educación Industrial Avanzada</p>
                         </div>

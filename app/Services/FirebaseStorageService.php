@@ -12,6 +12,10 @@ class FirebaseStorageService
 {
     protected $storage;
     protected $bucket;
+    protected array $storageConfig = [];
+    protected string $bucketName;
+    protected array $credentialsArray = [];
+    protected string $projectId;
 
     public function __construct()
     {
@@ -37,35 +41,11 @@ class FirebaseStorageService
             throw new \Exception("Invalid JSON in Firebase credentials file");
         }
 
-        // Configuración para StorageClient
-        $config = [
-            'projectId' => $projectId,
-            'keyFile' => $credentials,
-        ];
+        $this->credentialsArray = $credentials;
+        $this->projectId = $projectId;
+        $this->bucketName = $bucket;
 
-        // En desarrollo en Windows, pasar opciones de cURL directamente
-        if (env('APP_ENV') === 'local' && strtolower(PHP_OS_FAMILY) === 'windows') {
-            // Google Cloud Storage acepta estas opciones para Guzzle
-            $config['requestOptions'] = [
-                'verify' => false,
-                'http_errors' => false,
-                'timeout' => 60,
-                'curl' => [
-                    CURLOPT_SSL_VERIFYPEER => false,
-                    CURLOPT_SSL_VERIFYHOST => 0,
-                    CURLOPT_FOLLOWLOCATION => true,
-                ],
-            ];
-            
-            // Alternativa: pasar opciones de conexión
-            $config['connectionOptions'] = [
-                'verify' => false,
-            ];
-        }
-
-        $this->storage = new StorageClient($config);
-
-        $this->bucket = $this->storage->bucket($bucket);
+        $this->refreshStorageClient();
     }
 
     /**
@@ -81,13 +61,17 @@ class FirebaseStorageService
             // Generar nombre único
             $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
             $path = "{$folder}/{$filename}";
+            $downloadToken = (string) Str::uuid();
 
-            // En desarrollo en Windows con problemas SSL, simular la subida
-            if (env('APP_ENV') === 'local' && strtolower(PHP_OS_FAMILY) === 'windows') {
-                // NOTA: En desarrollo de Windows, simular upload (para evitar problemas SSL de cURL)
-                // En producción (Linux), esto NO se ejecuta y usa el upload real
-                logger()->info('Firebase: Simulando upload en Windows development (image: ' . $filename . ')');
-                
+            $simulateEnv = env('FIREBASE_SIMULATE_UPLOAD');
+            $simulateUpload = is_null($simulateEnv)
+                ? (env('APP_ENV') === 'local' && strtolower(PHP_OS_FAMILY) === 'windows')
+                : filter_var($simulateEnv, FILTER_VALIDATE_BOOLEAN);
+
+            // En desarrollo de Windows se permite simular la subida con toggle por env
+            if ($simulateUpload) {
+                logger()->info('Firebase: Simulando upload (image: ' . $filename . ')');
+
                 $url = sprintf(
                     'https://firebasestorage.googleapis.com/v0/b/%s/o/%s?alt=media',
                     env('FIREBASE_STORAGE_BUCKET'),
@@ -99,6 +83,7 @@ class FirebaseStorageService
                     'url' => $url,
                     'path' => $path,
                     'filename' => $filename,
+                    'downloadToken' => null,
                     'simulated' => true,
                 ];
             }
@@ -106,27 +91,61 @@ class FirebaseStorageService
             // Leer contenido del archivo
             $contents = file_get_contents($file->getRealPath());
 
-            // Subir a Firebase (solo en Linux o producción)
-            $object = $this->bucket->upload($contents, [
-                'name' => $path,
-                'metadata' => [
-                    'contentType' => $file->getMimeType(),
-                    'cacheControl' => 'public, max-age=3600',
-                ],
-            ]);
+            $attempts = 0;
+            $maxAttempts = 3;
 
-            // Generar URL pública
-            $url = sprintf(
-                'https://firebasestorage.googleapis.com/v0/b/%s/o/%s?alt=media',
-                env('FIREBASE_STORAGE_BUCKET'),
-                urlencode($path)
-            );
+            while ($attempts < $maxAttempts) {
+                try {
+                    $this->bucket->upload($contents, [
+                        'name' => $path,
+                        'metadata' => [
+                            'contentType' => $file->getMimeType(),
+                            'cacheControl' => 'public, max-age=3600',
+                            'metadata' => [
+                                'firebaseStorageDownloadTokens' => $downloadToken,
+                            ],
+                        ],
+                    ]);
+
+                    $baseUrl = sprintf(
+                        'https://firebasestorage.googleapis.com/v0/b/%s/o/%s',
+                        env('FIREBASE_STORAGE_BUCKET'),
+                        urlencode($path)
+                    );
+
+                    $query = 'alt=media';
+                    if (!empty($downloadToken)) {
+                        $query .= '&token=' . $downloadToken;
+                    }
+
+                    $url = $baseUrl . '?' . $query;
+
+                    return [
+                        'success' => true,
+                        'url' => $url,
+                        'path' => $path,
+                        'filename' => $filename,
+                        'downloadToken' => $downloadToken,
+                    ];
+                } catch (\Exception $inner) {
+                    $attempts++;
+                    logger()->error('Firebase upload error: ' . $inner->getMessage());
+
+                    if ($attempts >= $maxAttempts || !$this->shouldRetryUpload($inner)) {
+                        return [
+                            'success' => false,
+                            'message' => $inner->getMessage(),
+                        ];
+                    }
+
+                    $this->refreshStorageClient();
+                    usleep(200000); // 200ms antes de reintentar
+                }
+            }
 
             return [
-                'success' => true,
-                'url' => $url,
-                'path' => $path,
-                'filename' => $filename,
+                'success' => false,
+                'message' => 'No se pudo subir la imagen tras varios intentos',
             ];
         } catch (\Exception $e) {
             logger()->error('Firebase upload error: ' . $e->getMessage());
@@ -171,5 +190,71 @@ class FirebaseStorageService
             env('FIREBASE_STORAGE_BUCKET'),
             urlencode($path)
         );
+    }
+
+    private function refreshStorageClient(): void
+    {
+        $this->storageConfig = $this->buildStorageConfig();
+        $this->storage = new StorageClient($this->storageConfig);
+        $this->bucket = $this->storage->bucket($this->bucketName);
+    }
+
+    private function buildStorageConfig(): array
+    {
+        $config = [
+            'projectId' => $this->projectId,
+            'keyFile' => $this->credentialsArray,
+        ];
+
+        if ($this->shouldDisableSslVerification()) {
+            $config['requestOptions'] = [
+                'verify' => false,
+                'http_errors' => false,
+                'timeout' => 60,
+                'curl' => [
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => 0,
+                    CURLOPT_FOLLOWLOCATION => true,
+                ],
+            ];
+
+            $config['connectionOptions'] = [
+                'verify' => false,
+            ];
+
+            $handlerStack = HandlerStack::create(new CurlHandler());
+            $guzzleClient = new Client([
+                'handler' => $handlerStack,
+                'verify' => false,
+                'http_errors' => false,
+                'timeout' => 60,
+            ]);
+
+            $config['httpHandler'] = function ($request, array $options) use ($guzzleClient) {
+                $merged = array_merge([
+                    'verify' => false,
+                    'http_errors' => false,
+                    'timeout' => 60,
+                ], $options);
+
+                return $guzzleClient->send($request, $merged);
+            };
+        }
+
+        return $config;
+    }
+
+    private function shouldDisableSslVerification(): bool
+    {
+        return env('APP_ENV') === 'local' && strtolower(PHP_OS_FAMILY) === 'windows';
+    }
+
+    private function shouldRetryUpload(\Exception $exception): bool
+    {
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'SSL certificate')
+            || str_contains($message, 'Could not resolve host')
+            || str_contains($message, 'Failed to connect');
     }
 }

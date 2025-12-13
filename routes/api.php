@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\ImageUploadController;
+use App\Http\Controllers\Api\CompanyAssetController;
 
 // Rutas públicas (sin autenticación)
 
@@ -35,6 +36,9 @@ Route::get('/exchange-rates/convert', [ExchangeRateController::class, 'convert']
 
 // Upload genérico (público)
 Route::post('/upload-image', [ImageUploadController::class, 'uploadImage']);
+
+// Activos corporativos (público, solo lectura)
+Route::get('/company-assets', [CompanyAssetController::class, 'index']);
 
 // Rutas que requieren autenticación (Sanctum)
 Route::middleware('auth:sanctum')->group(function () {
@@ -70,4 +74,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Exchange Rates (admin)
     Route::post('/exchange-rates/refresh', [ExchangeRateController::class, 'refresh']);
+
+    // Activos corporativos (solo admin)
+    Route::post('/company-assets', [CompanyAssetController::class, 'store']);
+    Route::put('/company-assets/{companyAsset}', [CompanyAssetController::class, 'update']);
+    Route::delete('/company-assets/{companyAsset}', [CompanyAssetController::class, 'destroy']);
 });

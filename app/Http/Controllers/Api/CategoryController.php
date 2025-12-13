@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
@@ -49,11 +52,25 @@ class CategoryController extends Controller
             ], 403);
         }
 
-        $validated = $request->validate([
-            'name' => 'required|string|unique:categories',
-            'slug' => 'required|string|unique:categories',
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255|unique:categories,name',
+            'slug' => 'nullable|string|unique:categories,slug',
             'description' => 'nullable|string',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        if (!isset($validated['slug'])) {
+            $validated['slug'] = Str::slug($validated['name']);
+        }
 
         $category = Category::create($validated);
 
@@ -77,11 +94,34 @@ class CategoryController extends Controller
             ], 403);
         }
 
-        $validated = $request->validate([
-            'name' => 'nullable|string|unique:categories,name,' . $category->id,
-            'slug' => 'nullable|string|unique:categories,slug,' . $category->id,
+        $validator = Validator::make($request->all(), [
+            'name' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')->ignore($category->id),
+            ],
+            'slug' => [
+                'nullable',
+                'string',
+                Rule::unique('categories', 'slug')->ignore($category->id),
+            ],
             'description' => 'nullable|string',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        if (isset($validated['name']) && !isset($validated['slug'])) {
+            $validated['slug'] = Str::slug($validated['name']);
+        }
 
         $category->update($validated);
 

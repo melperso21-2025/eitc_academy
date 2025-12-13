@@ -7,6 +7,8 @@ use App\Models\Category;
 use App\Services\FirebaseStorageService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class CourseController extends Controller
@@ -64,10 +66,28 @@ class CourseController extends Controller
             });
         }
 
-        // Solo mostrar cursos publicados
-        $query->where('is_published', true);
+        $isAdmin = auth('sanctum')->check() && auth('sanctum')->user()->role === 'admin';
 
-        $courses = $query->paginate(10);
+        // Solo mostrar cursos publicados para usuarios regulares
+        if (!$isAdmin) {
+            $query->where('is_published', true);
+        }
+
+        if ($isAdmin) {
+            $courses = $query->orderByDesc('created_at')->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $courses,
+            ]);
+        }
+
+        $perPage = (int) $request->input('per_page', 10);
+        if ($perPage <= 0) {
+            $perPage = 10;
+        }
+
+        $courses = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -107,14 +127,18 @@ class CourseController extends Controller
                 'id' => $course->id,
                 'name' => $course->name,
                 'slug' => $course->slug,
+                'category_id' => $course->category_id,
                 'description' => $course->description,
                 'price' => $course->price,
+                'discount_amount' => $course->discount_amount,
+                'discount_percent' => $course->discount_percent,
                 'image_url' => $course->image_url,
                 'modality' => $course->modality,
                 'level' => $course->level,
                 'certificate' => $course->certificate,
                 'duration_hours' => $course->duration_hours,
                 'syllabus' => $course->syllabus,
+                'is_published' => $course->is_published,
                 'category' => $course->category,
                 'comments_count' => $course->comments->count(),
                 'enrolled_count' => $course->enrollments->count(),
@@ -138,7 +162,7 @@ class CourseController extends Controller
             ], 403);
         }
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'category_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255|unique:courses',
             'description' => 'required|string',
@@ -148,8 +172,41 @@ class CourseController extends Controller
             'certificate' => 'nullable|string',
             'duration_hours' => 'required|integer|min:1',
             'syllabus' => 'nullable|string',
+            'discount_amount' => 'nullable|numeric|min:0',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB máximo
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        $discountAmount = array_key_exists('discount_amount', $validated)
+            ? ($validated['discount_amount'] !== null ? (float) $validated['discount_amount'] : null)
+            : null;
+
+        if ($discountAmount !== null && $discountAmount > (float) $validated['price']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => [
+                    'discount_amount' => ['El descuento no puede ser mayor al precio.'],
+                ],
+            ], 422);
+        }
+
+        if ($discountAmount !== null && $discountAmount > 0) {
+            $validated['discount_amount'] = $discountAmount;
+            $validated['discount_percent'] = round(($discountAmount / (float) $validated['price']) * 100, 2);
+        } else {
+            $validated['discount_amount'] = null;
+            $validated['discount_percent'] = null;
+        }
 
         // Generar slug automáticamente
         $validated['slug'] = Str::slug($validated['name']);
@@ -193,9 +250,14 @@ class CourseController extends Controller
             ], 403);
         }
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'category_id' => 'nullable|exists:categories,id',
-            'name' => 'nullable|string|max:255|unique:courses,name,' . $course->id,
+            'name' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('courses', 'name')->ignore($course->id),
+            ],
             'description' => 'nullable|string',
             'price' => 'nullable|numeric|min:0',
             'modality' => 'nullable|in:virtual,presencial,hibrido',
@@ -204,8 +266,48 @@ class CourseController extends Controller
             'duration_hours' => 'nullable|integer|min:1',
             'syllabus' => 'nullable|string',
             'is_published' => 'nullable|boolean',
+            'discount_amount' => 'nullable|numeric|min:0',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB máximo
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        if ($request->has('discount_amount')) {
+            $priceBase = array_key_exists('price', $validated)
+                ? (float) $validated['price']
+                : (float) $course->price;
+
+            $discountAmountInput = $request->input('discount_amount');
+            $discountAmount = ($discountAmountInput === null || $discountAmountInput === '')
+                ? null
+                : (float) $discountAmountInput;
+
+            if ($discountAmount !== null && $discountAmount > $priceBase) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error de validación',
+                    'errors' => [
+                        'discount_amount' => ['El descuento no puede ser mayor al precio.'],
+                    ],
+                ], 422);
+            }
+
+            if ($discountAmount !== null && $discountAmount > 0) {
+                $validated['discount_amount'] = $discountAmount;
+                $validated['discount_percent'] = round(($discountAmount / $priceBase) * 100, 2);
+            } else {
+                $validated['discount_amount'] = null;
+                $validated['discount_percent'] = null;
+            }
+        }
 
         // Actualizar slug si el nombre cambió
         if (isset($validated['name'])) {

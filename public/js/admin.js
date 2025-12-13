@@ -1,5 +1,12 @@
 // Configuración de la API
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const FALLBACK_IMAGE_URL = 'https://www.mapfreglobalrisks.com/media/Termografia-Infrarroja-MGR-933x526-1.jpg';
+const formAlert = document.getElementById('cursoFormAlert');
+const companyAssetAlert = document.getElementById('companyAssetAlert');
+const companyAssetForm = document.getElementById('companyAssetForm');
+const companyAssetSubmit = document.getElementById('companyAssetSubmit');
+const companyLogoImg = document.getElementById('companyLogo');
+const companyLogoWrapper = document.getElementById('companyLogoWrapper');
 let authToken = localStorage.getItem('authToken');
 let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 let cursoEnEdicion = null;
@@ -18,18 +25,119 @@ function showNotification(message, type = 'success') {
     alert(message);
 }
 
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value).replace(/[&<>"']/g, (char) => {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+        };
+
+        return map[char] || char;
+    });
+}
+
+function updateFormAlert(type, message) {
+    if (!formAlert) return;
+
+    const baseClasses = 'border rounded px-4 py-3 text-sm font-semibold';
+    let variantClasses = 'border-red-300 bg-red-50 text-red-700';
+
+    if (type === 'success') {
+        variantClasses = 'border-green-300 bg-green-50 text-green-700';
+    }
+
+    formAlert.className = `${baseClasses} ${variantClasses}`;
+    formAlert.textContent = message;
+    formAlert.classList.remove('hidden');
+}
+
+function clearFormAlert() {
+    if (!formAlert) return;
+    formAlert.className = 'hidden border rounded px-4 py-3 text-sm font-semibold';
+    formAlert.textContent = '';
+}
+
+function updateCompanyAssetAlert(type, message) {
+    if (!companyAssetAlert) return;
+
+    const baseClasses = 'border rounded px-4 py-3 text-sm font-semibold';
+    let variantClasses = 'border-red-300 bg-red-50 text-red-700';
+
+    if (type === 'success') {
+        variantClasses = 'border-green-300 bg-green-50 text-green-700';
+    }
+
+    companyAssetAlert.className = `${baseClasses} ${variantClasses}`;
+    companyAssetAlert.textContent = message;
+    companyAssetAlert.classList.remove('hidden');
+}
+
+function clearCompanyAssetAlert() {
+    if (!companyAssetAlert) return;
+    companyAssetAlert.className = 'hidden border rounded px-4 py-3 text-sm font-semibold';
+    companyAssetAlert.textContent = '';
+}
+
+function updateCompanyLogoFromAssets(assets) {
+    if (!companyLogoImg || !companyLogoWrapper) return;
+
+    const logoAsset = Array.isArray(assets)
+        ? assets.find((asset) => asset?.type === 'logo' && asset?.image_url)
+        : null;
+
+    if (logoAsset) {
+        const baseUrl = logoAsset.image_url;
+        const cacheSafeUrl = baseUrl
+            ? (baseUrl.includes('?') ? `${baseUrl}&cb=${Date.now()}` : `${baseUrl}?cb=${Date.now()}`)
+            : '';
+
+        companyLogoImg.src = cacheSafeUrl;
+        companyLogoImg.alt = logoAsset.title || 'Logo principal';
+        companyLogoImg.classList.remove('hidden');
+        companyLogoWrapper.classList.remove('bg-gray-200');
+        companyLogoWrapper.classList.add('bg-accent');
+    } else {
+        companyLogoImg.src = '';
+        companyLogoImg.alt = 'Logo principal';
+        companyLogoImg.classList.add('hidden');
+        companyLogoWrapper.classList.add('bg-accent');
+    }
+}
+
 async function fetchAPI(endpoint, options = {}) {
     const defaultOptions = {
+        cache: 'no-store',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`
+            'Authorization': `Bearer ${authToken}`,
+            'Cache-Control': 'no-cache'
         }
     };
 
-    const finalOptions = { ...defaultOptions, ...options };
+    const finalOptions = {
+        ...defaultOptions,
+        ...options,
+        headers: {
+            ...(defaultOptions.headers || {}),
+            ...(options.headers || {}),
+        },
+    };
     
     if (finalOptions.body && typeof finalOptions.body === 'object' && !(finalOptions.body instanceof FormData)) {
         finalOptions.body = JSON.stringify(finalOptions.body);
+    }
+
+    if (finalOptions.body instanceof FormData) {
+        if (finalOptions.headers && finalOptions.headers['Content-Type']) {
+            delete finalOptions.headers['Content-Type'];
+        }
     }
 
     try {
@@ -42,11 +150,31 @@ async function fetchAPI(endpoint, options = {}) {
                 localStorage.removeItem('currentUser');
                 window.location.href = '/';
             }
-            const error = await response.json();
-            throw new Error(error.message || `Error ${response.status}`);
+
+            const responseText = await response.text();
+            let errorData = {};
+            try {
+                errorData = JSON.parse(responseText);
+            } catch (e) {
+                errorData = { message: responseText || `Error ${response.status}` };
+            }
+
+            const apiError = new Error(errorData.message || `Error ${response.status}`);
+            apiError.status = response.status;
+            apiError.details = errorData.errors || null;
+            apiError.raw = errorData;
+            throw apiError;
         }
 
-        return await response.json();
+        const responseText = await response.text();
+        try {
+            return JSON.parse(responseText);
+        } catch (e) {
+            console.error('JSON Parse Error:', responseText);
+            const apiError = new Error('Invalid JSON response from server');
+            apiError.raw = responseText;
+            throw apiError;
+        }
     } catch (error) {
         console.error('API Error:', error);
         throw error;
@@ -54,28 +182,63 @@ async function fetchAPI(endpoint, options = {}) {
 }
 
 // ============= TABS =============
-function switchTab(tabName) {
-    // Ocultar todos los tabs
-    document.getElementById('tabCursosContent').classList.add('hidden');
-    document.getElementById('tabCrearContent').classList.add('hidden');
+const tabDefinitions = {
+    cursos: {
+        contentId: 'tabCursosContent',
+        buttonId: 'tabCursos',
+        onShow: () => loadMisCursos(),
+    },
+    crear: {
+        contentId: 'tabCrearContent',
+        buttonId: 'tabCrear',
+        onShow: (opts = {}) => {
+            if (!opts.keepFormData) {
+                limpiarFormulario();
+            }
+        },
+    },
+    imagenes: {
+        contentId: 'tabImagenesContent',
+        buttonId: 'tabImagenes',
+        onShow: () => loadCoursesForUpload(),
+    },
+    empresa: {
+        contentId: 'tabEmpresaContent',
+        buttonId: 'tabEmpresa',
+        onShow: () => loadCompanyAssets(),
+    },
+};
 
-    // Desactivar todos los botones
-    document.getElementById('tabCursos').classList.remove('bg-primary');
-    document.getElementById('tabCursos').classList.add('bg-gray-300', 'text-secondary');
-    document.getElementById('tabCrear').classList.remove('bg-primary');
-    document.getElementById('tabCrear').classList.add('bg-gray-300', 'text-secondary');
+function switchTab(tabName, options = {}) {
+    const targetKey = tabDefinitions[tabName] ? tabName : 'cursos';
+    const targetTab = tabDefinitions[targetKey];
 
-    // Mostrar tab seleccionado
-    if (tabName === 'cursos') {
-        document.getElementById('tabCursosContent').classList.remove('hidden');
-        document.getElementById('tabCursos').classList.add('bg-primary');
-        document.getElementById('tabCursos').classList.remove('bg-gray-300', 'text-secondary');
-        loadMisCursos();
-    } else if (tabName === 'crear') {
-        document.getElementById('tabCrearContent').classList.remove('hidden');
-        document.getElementById('tabCrear').classList.add('bg-primary');
-        document.getElementById('tabCrear').classList.remove('bg-gray-300', 'text-secondary');
-        limpiarFormulario();
+    Object.values(tabDefinitions).forEach(({ contentId, buttonId }) => {
+        const contentEl = document.getElementById(contentId);
+        if (contentEl) {
+            contentEl.classList.add('hidden');
+        }
+
+        const buttonEl = document.getElementById(buttonId);
+        if (buttonEl) {
+            buttonEl.classList.remove('bg-primary');
+            buttonEl.classList.add('bg-gray-300', 'text-secondary');
+        }
+    });
+
+    const contentEl = document.getElementById(targetTab.contentId);
+    if (contentEl) {
+        contentEl.classList.remove('hidden');
+    }
+
+    const buttonEl = document.getElementById(targetTab.buttonId);
+    if (buttonEl) {
+        buttonEl.classList.add('bg-primary');
+        buttonEl.classList.remove('bg-gray-300', 'text-secondary');
+    }
+
+    if (typeof targetTab.onShow === 'function') {
+        targetTab.onShow(options);
     }
 }
 
@@ -113,18 +276,42 @@ async function loadMisCursos() {
         }
 
         cursos.forEach(curso => {
+            const hasCustomImage = curso.image_url && curso.image_url.trim() !== '';
+            const baseImageUrl = hasCustomImage ? curso.image_url : FALLBACK_IMAGE_URL;
+            const imageSrc = hasCustomImage
+                ? (baseImageUrl.includes('?') ? `${baseImageUrl}&t=${Date.now()}` : `${baseImageUrl}?t=${Date.now()}`)
+                : baseImageUrl;
+
+            const priceValue = Number(curso.price ?? 0);
+            const formattedPrice = Number.isFinite(priceValue) && !Number.isNaN(priceValue)
+                ? priceValue.toFixed(2)
+                : '0.00';
+
+            const discountValue = Number(curso.discount_amount ?? 0);
+            const hasDiscount = Number.isFinite(discountValue) && !Number.isNaN(discountValue) && discountValue > 0;
+            const discountPercent = Number(curso.discount_percent ?? 0);
+            const formattedDiscountAmount = hasDiscount ? discountValue.toFixed(2) : null;
+            const formattedDiscountPercent = hasDiscount ? discountPercent.toFixed(2) : null;
+            const finalPrice = hasDiscount ? Math.max(priceValue - discountValue, 0).toFixed(2) : null;
+
             const card = document.createElement('div');
-            card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden';
+            card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden flex flex-col';
             
             card.innerHTML = `
-                <div class="h-40 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center">
-                    <span class="text-white text-4xl">📚</span>
+                <div class="h-40 bg-gray-100 overflow-hidden">
+                    <img src="${imageSrc}" alt="${curso.name}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE_URL}';">
                 </div>
-                <div class="p-4">
-                    <h3 class="font-bold text-lg text-secondary mb-1">${curso.name}</h3>
-                    <p class="text-gray-600 text-sm mb-2">${curso.category?.name || 'Sin categoría'}</p>
-                    <p class="text-accent font-bold mb-3">S/. ${curso.price}</p>
-                    <div class="flex space-x-2">
+                <div class="p-4 flex flex-col gap-2 flex-1">
+                    <h3 class="font-bold text-lg text-secondary leading-snug">${curso.name}</h3>
+                    <p class="text-gray-600 text-sm">${curso.category?.name || 'Sin categoría'}</p>
+                    <div>
+                        <p class="text-accent font-bold">$${formattedPrice}</p>
+                        ${hasDiscount ? `
+                            <p class="text-green-600 text-sm">Descuento: $${formattedDiscountAmount} (${formattedDiscountPercent}%)</p>
+                            <p class="text-secondary text-sm font-semibold">Precio final: $${finalPrice}</p>
+                        ` : ''}
+                    </div>
+                    <div class="flex space-x-2 mt-auto pt-2">
                         <button onclick="editarCurso(${curso.id})" class="flex-1 px-3 py-2 bg-primary text-white rounded text-sm hover:bg-opacity-90 transition">
                             Editar
                         </button>
@@ -148,6 +335,8 @@ async function editarCurso(cursoId) {
         const response = await fetchAPI(`/courses/${cursoId}`);
         const curso = response.data;
 
+        switchTab('crear', { keepFormData: true });
+
         cursoEnEdicion = curso.id;
 
         document.getElementById('cursoId').value = curso.id;
@@ -160,10 +349,10 @@ async function editarCurso(cursoId) {
         document.getElementById('cursoDuracion').value = curso.duration_hours;
         document.getElementById('cursoCertificado').value = curso.certificate || '';
         document.getElementById('cursoSyllabus').value = curso.syllabus;
+        document.getElementById('cursoDescuento').value = curso.discount_amount ?? '';
         document.getElementById('cursoPublicado').checked = curso.is_published;
 
         document.getElementById('crearTitulo').textContent = 'Editar Curso';
-        switchTab('crear');
 
     } catch (error) {
         showNotification('Error al cargar curso: ' + error.message, 'error');
@@ -204,7 +393,8 @@ async function publicarCurso(cursoId) {
             })
         });
 
-        showNotification(nuevoEstado ? 'Curso publicado' : 'Curso despublicado');
+        const estadoActual = nuevoEstado ? 'publicado' : 'despublicado';
+        showNotification(`Curso ${estadoActual}`);
         closeEditModal();
         loadMisCursos();
 
@@ -273,21 +463,45 @@ async function eliminarCurso(cursoId) {
 // ============= GUARDAR CURSO =============
 document.getElementById('cursoForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    clearFormAlert();
 
     const cursoId = document.getElementById('cursoId').value;
     const imagen = document.getElementById('cursoImagen').files[0];
+    const discountRaw = document.getElementById('cursoDescuento').value.trim();
+
+    const priceValue = parseFloat(document.getElementById('cursoPrecio').value);
+    if (Number.isNaN(priceValue) || priceValue <= 0) {
+        updateFormAlert('error', 'Por favor ingresa un precio válido mayor a 0.');
+        return;
+    }
+
+    let discountAmount = null;
+    if (discountRaw !== '') {
+        const parsedDiscount = parseFloat(discountRaw);
+        if (Number.isNaN(parsedDiscount) || parsedDiscount < 0) {
+            updateFormAlert('error', 'El descuento debe ser un número mayor o igual a 0.');
+            return;
+        }
+        discountAmount = parsedDiscount;
+
+        if (discountAmount > priceValue) {
+            updateFormAlert('error', 'El descuento no puede ser mayor al precio.');
+            return;
+        }
+    }
 
     const cursoData = {
         name: document.getElementById('cursoNombre').value,
         category_id: parseInt(document.getElementById('cursoCategoria').value),
         description: document.getElementById('cursoDescripcion').value,
-        price: parseFloat(document.getElementById('cursoPrecio').value),
+        price: priceValue,
         modality: document.getElementById('cursoModalidad').value,
         level: document.getElementById('cursoNivel').value,
         duration_hours: parseInt(document.getElementById('cursoDuracion').value),
         certificate: document.getElementById('cursoCertificado').value,
         syllabus: document.getElementById('cursoSyllabus').value,
-        is_published: document.getElementById('cursoPublicado').checked
+        is_published: document.getElementById('cursoPublicado').checked,
+        discount_amount: discountAmount
     };
 
     try {
@@ -321,6 +535,7 @@ document.getElementById('cursoForm').addEventListener('submit', async (e) => {
             }
 
             showNotification('Curso actualizado correctamente');
+            clearFormAlert();
             limpiarFormulario();
             await loadMisCursos(); // Recargar lista
             switchTab('cursos');
@@ -370,6 +585,7 @@ document.getElementById('cursoForm').addEventListener('submit', async (e) => {
             }
 
             showNotification('Curso creado correctamente');
+            clearFormAlert();
             limpiarFormulario();
             await loadMisCursos(); // Recargar lista ANTES de cambiar tab
             switchTab('cursos');
@@ -377,9 +593,66 @@ document.getElementById('cursoForm').addEventListener('submit', async (e) => {
 
     } catch (error) {
         console.error('Error completo:', error);
-        showNotification('Error: ' + error.message, 'error');
+        if (error.details) {
+            console.error('Detalles de validación:', error.details);
+        }
+
+        let detalleMsg = '';
+        if (error.details) {
+            const mensajes = Object.values(error.details).flat();
+            if (mensajes.length) {
+                detalleMsg = ' - ' + mensajes.join(' | ');
+            }
+        }
+
+        const mensaje = 'Error: ' + error.message + detalleMsg;
+        updateFormAlert('error', mensaje);
+        showNotification(mensaje, 'error');
     }
 });
+
+if (companyAssetForm) {
+    companyAssetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearCompanyAssetAlert();
+
+        if (!companyAssetSubmit) {
+            return;
+        }
+
+        const formData = new FormData(companyAssetForm);
+
+        companyAssetSubmit.disabled = true;
+
+        try {
+            await fetchAPI('/company-assets', {
+                method: 'POST',
+                body: formData,
+            });
+
+            updateCompanyAssetAlert('success', 'Imagen guardada correctamente.');
+            showNotification('Imagen corporativa guardada correctamente');
+            companyAssetForm.reset();
+            loadCompanyAssets();
+        } catch (error) {
+            console.error('Error guardando imagen corporativa:', error);
+
+            let detalleMsg = '';
+            if (error.details) {
+                const mensajes = Object.values(error.details).flat();
+                if (mensajes.length) {
+                    detalleMsg = ' - ' + mensajes.join(' | ');
+                }
+            }
+
+            const mensaje = 'Error: ' + (error.message || 'No se pudo guardar la imagen') + detalleMsg;
+            updateCompanyAssetAlert('error', mensaje);
+            showNotification(mensaje, 'error');
+        } finally {
+            companyAssetSubmit.disabled = false;
+        }
+    });
+}
 
 // ============= LIMPIAR FORMULARIO =============
 function limpiarFormulario() {
@@ -387,6 +660,19 @@ function limpiarFormulario() {
     document.getElementById('cursoId').value = '';
     document.getElementById('crearTitulo').textContent = 'Crear Nuevo Curso';
     cursoEnEdicion = null;
+    clearFormAlert();
+}
+
+function cancelarCreacion() {
+    limpiarFormulario();
+    switchTab('cursos');
+}
+
+function resetCompanyAssetForm() {
+    if (companyAssetForm) {
+        companyAssetForm.reset();
+    }
+    clearCompanyAssetAlert();
 }
 
 // ============= UPLOAD DE IMÁGENES =============
@@ -409,11 +695,27 @@ async function loadCoursesForUpload() {
             select.appendChild(option);
         });
 
-        // Event listener para actualizar galería
-        select.addEventListener('change', (e) => {
-            selectedCourseId = e.target.value;
+        const previousSelection = select.value;
+
+        if (selectedCourseId) {
+            select.value = selectedCourseId;
+        }
+
+        if (!select.value && previousSelection) {
+            select.value = previousSelection;
+        }
+
+        select.onchange = (e) => {
+            selectedCourseId = e.target.value || null;
             loadCourseImages(selectedCourseId);
-        });
+        };
+
+        if (select.value) {
+            selectedCourseId = select.value;
+            loadCourseImages(selectedCourseId);
+        } else {
+            loadCourseImages(null);
+        }
     } catch (error) {
         console.error('Error cargando cursos:', error);
         showNotification('Error al cargar cursos', 'error');
@@ -574,29 +876,150 @@ async function loadCourseImages(courseId) {
         const data = await fetchAPI(`/courses/${courseId}`);
         const course = data.data;
 
-        if (course.image_url) {
-            const imageUrl = course.image_url.includes('?') 
-                ? course.image_url + '&t=' + Date.now()
-                : course.image_url + '?t=' + Date.now();
+        const hasCustomImage = course.image_url && course.image_url.trim() !== '';
+        const rawImageUrl = hasCustomImage ? course.image_url : FALLBACK_IMAGE_URL;
+        const imageUrl = hasCustomImage
+            ? (rawImageUrl.includes('?') ? rawImageUrl + '&t=' + Date.now() : rawImageUrl + '?t=' + Date.now())
+            : rawImageUrl;
 
-            document.getElementById('imageGallery').innerHTML = `
-                <div class="border border-gray-300 rounded-lg overflow-hidden">
-                    <img src="${imageUrl}" alt="${course.name}" class="w-full h-40 object-cover">
-                    <div class="p-4 bg-gray-50">
-                        <p class="text-sm font-bold text-secondary">${course.name}</p>
-                        <p class="text-xs text-gray-600 mt-1 break-all">${course.image_url}</p>
-                        <button type="button" onclick="copyToClipboard('${imageUrl}')" class="mt-2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
-                            📋 Copiar URL
-                        </button>
-                    </div>
+        document.getElementById('imageGallery').innerHTML = `
+            <div class="border border-gray-300 rounded-lg overflow-hidden">
+                <img src="${imageUrl}" alt="${course.name}" class="w-full h-40 object-cover" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE_URL}';">
+                <div class="p-4 bg-gray-50">
+                    <p class="text-sm font-bold text-secondary">${course.name}</p>
+                    <p class="text-xs text-gray-600 mt-1 break-all">${course.image_url || 'Imagen genérica'}</p>
+                    <button type="button" onclick="copyToClipboard('${rawImageUrl}')" class="mt-2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
+                        📋 Copiar URL
+                    </button>
                 </div>
-            `;
-        } else {
-            document.getElementById('imageGallery').innerHTML = '<p class="text-gray-600 text-center py-8">Este curso aún no tiene imagen</p>';
-        }
+            </div>
+        `;
     } catch (error) {
         console.error('Error cargando imágenes:', error);
         document.getElementById('imageGallery').innerHTML = '<p class="text-red-600 text-center py-8">Error al cargar imagen</p>';
+    }
+}
+
+// ============= ACTIVOS CORPORATIVOS =============
+const companyAssetTypeLabels = {
+    logo: 'Logo principal',
+    brand: 'Marca / Imagen institucional',
+    history: 'Historial de talleres',
+};
+
+async function loadCompanyAssets() {
+    const listContainer = document.getElementById('companyAssetsList');
+    if (!listContainer) return;
+
+    try {
+        const response = await fetchAPI('/company-assets');
+        const assets = response.data || [];
+        renderCompanyAssetsList(assets);
+        updateCompanyLogoFromAssets(assets);
+    } catch (error) {
+        console.error('Error cargando imágenes corporativas:', error);
+        renderCompanyAssetsList([]);
+        updateCompanyAssetAlert('error', 'Error al cargar las imágenes corporativas.');
+        updateCompanyLogoFromAssets([]);
+    }
+}
+
+function renderCompanyAssetsList(assets) {
+    const container = document.getElementById('companyAssetsList');
+    if (!container) return;
+
+    if (!assets || assets.length === 0) {
+        container.innerHTML = '<p class="text-gray-600 text-center py-8">No hay imágenes registradas todavía.</p>';
+        return;
+    }
+
+    const grouped = assets.reduce((acc, asset) => {
+        const type = asset.type || 'otros';
+        if (!acc[type]) {
+            acc[type] = [];
+        }
+        acc[type].push(asset);
+        return acc;
+    }, {});
+
+    const typeOrder = ['logo', 'brand', 'history'];
+    const renderedTypes = new Set();
+    let html = '';
+
+    const buildSection = (type, items) => {
+        if (!items || items.length === 0) return;
+        renderedTypes.add(type);
+
+        const friendlyName = companyAssetTypeLabels[type] || `Tipo: ${type}`;
+        const cards = items
+            .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+            .map((asset) => {
+                const cacheSafeUrl = asset.image_url
+                    ? (asset.image_url.includes('?')
+                        ? `${asset.image_url}&t=${Date.now()}`
+                        : `${asset.image_url}?t=${Date.now()}`)
+                    : FALLBACK_IMAGE_URL;
+
+                const description = asset.description ? `<p class="text-sm text-gray-600">${escapeHtml(asset.description)}</p>` : '';
+                const title = asset.title ? `<p class="text-base font-semibold text-secondary">${escapeHtml(asset.title)}</p>` : '';
+                const orderLabel = `<span class="text-xs text-gray-500">Orden: ${asset.display_order ?? 0}</span>`;
+
+                return `
+                    <div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                        <img src="${cacheSafeUrl}" alt="${escapeHtml(asset.title || friendlyName)}" class="w-full h-40 object-cover" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE_URL}';">
+                        <div class="p-4 space-y-2">
+                            <div class="flex items-center justify-between text-sm text-gray-500">
+                                <span class="font-semibold text-secondary">${escapeHtml(friendlyName)}</span>
+                                ${orderLabel}
+                            </div>
+                            ${title}
+                            ${description}
+                            <div class="flex justify-end space-x-2 pt-2">
+                                <button type="button" onclick="copyToClipboard('${asset.image_url}')" class="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200">Copiar URL</button>
+                                <button type="button" onclick="deleteCompanyAsset(${asset.id})" class="px-3 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200">Eliminar</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            })
+            .join('');
+
+        html += `
+            <section class="space-y-3">
+                <header class="flex items-center justify-between">
+                    <h4 class="text-lg font-bold text-secondary">${escapeHtml(friendlyName)}</h4>
+                    <span class="text-xs text-gray-500">${items.length} elemento(s)</span>
+                </header>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    ${cards}
+                </div>
+            </section>
+        `;
+    };
+
+    typeOrder.forEach((type) => buildSection(type, grouped[type] || []));
+
+    Object.keys(grouped)
+        .filter((type) => !renderedTypes.has(type))
+        .forEach((type) => buildSection(type, grouped[type]));
+
+    container.innerHTML = html || '<p class="text-gray-600 text-center py-8">No hay imágenes registradas todavía.</p>';
+}
+
+async function deleteCompanyAsset(assetId) {
+    if (!assetId) return;
+
+    const confirmed = confirm('¿Estás seguro de eliminar este recurso?');
+    if (!confirmed) return;
+
+    try {
+        await fetchAPI(`/company-assets/${assetId}`, { method: 'DELETE' });
+        showNotification('Imagen corporativa eliminada correctamente');
+        loadCompanyAssets();
+    } catch (error) {
+        console.error('Error eliminando asset:', error);
+        const detalle = error.message || 'No se pudo eliminar el recurso.';
+        updateCompanyAssetAlert('error', `Error: ${detalle}`);
     }
 }
 
@@ -647,5 +1070,6 @@ async function logoutAdmin() {
 document.addEventListener('DOMContentLoaded', () => {
     loadCategorias();
     loadCoursesForUpload(); // Cargar cursos para upload
+    loadCompanyAssets();
     switchTab('cursos');
 });

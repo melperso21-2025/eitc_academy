@@ -12,6 +12,8 @@ class Course extends Model
         'slug',
         'description',
         'price',
+        'discount_amount',
+        'discount_percent',
         'image_url',
         'modality',
         'level',
@@ -23,6 +25,8 @@ class Course extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'discount_percent' => 'decimal:2',
         'is_published' => 'boolean',
     ];
 
