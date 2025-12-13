@@ -1,6 +1,6 @@
 // Configuración de la API
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
-const FALLBACK_IMAGE_URL = 'https://www.mapfreglobalrisks.com/media/Termografia-Infrarroja-MGR-933x526-1.jpg';
+const DEFAULT_FALLBACK_IMAGE_URL = '/images/fallback-course.svg';
 const formAlert = document.getElementById('cursoFormAlert');
 const companyAssetAlert = document.getElementById('companyAssetAlert');
 const companyAssetForm = document.getElementById('companyAssetForm');
@@ -10,6 +10,7 @@ const companyLogoWrapper = document.getElementById('companyLogoWrapper');
 let authToken = localStorage.getItem('authToken');
 let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 let cursoEnEdicion = null;
+let courseFallbackImageUrl = DEFAULT_FALLBACK_IMAGE_URL;
 
 // ============= PROTECCIÓN DE ACCESO =============
 if (!authToken || !currentUser || currentUser.role !== 'admin') {
@@ -109,6 +110,20 @@ function updateCompanyLogoFromAssets(assets) {
         companyLogoImg.classList.add('hidden');
         companyLogoWrapper.classList.add('bg-accent');
     }
+}
+
+function updateCourseFallbackFromAssets(assets) {
+    const fallbackAsset = Array.isArray(assets)
+        ? assets.find((asset) => asset?.type === 'course_fallback' && asset?.image_url)
+        : null;
+
+    const fallbackUrl = fallbackAsset?.image_url || DEFAULT_FALLBACK_IMAGE_URL;
+    if (courseFallbackImageUrl === fallbackUrl) {
+        return false;
+    }
+
+    courseFallbackImageUrl = fallbackUrl;
+    return true;
 }
 
 async function fetchAPI(endpoint, options = {}) {
@@ -277,7 +292,8 @@ async function loadMisCursos() {
 
         cursos.forEach(curso => {
             const hasCustomImage = curso.image_url && curso.image_url.trim() !== '';
-            const baseImageUrl = hasCustomImage ? curso.image_url : FALLBACK_IMAGE_URL;
+            const fallbackImage = courseFallbackImageUrl || DEFAULT_FALLBACK_IMAGE_URL;
+            const baseImageUrl = hasCustomImage ? curso.image_url : fallbackImage;
             const imageSrc = hasCustomImage
                 ? (baseImageUrl.includes('?') ? `${baseImageUrl}&t=${Date.now()}` : `${baseImageUrl}?t=${Date.now()}`)
                 : baseImageUrl;
@@ -299,7 +315,7 @@ async function loadMisCursos() {
             
             card.innerHTML = `
                 <div class="h-40 bg-gray-100 overflow-hidden">
-                    <img src="${imageSrc}" alt="${curso.name}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE_URL}';">
+                    <img src="${imageSrc}" alt="${curso.name}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='${fallbackImage}';">
                 </div>
                 <div class="p-4 flex flex-col gap-2 flex-1">
                     <h3 class="font-bold text-lg text-secondary leading-snug">${curso.name}</h3>
@@ -876,15 +892,16 @@ async function loadCourseImages(courseId) {
         const data = await fetchAPI(`/courses/${courseId}`);
         const course = data.data;
 
+        const fallbackImage = courseFallbackImageUrl || DEFAULT_FALLBACK_IMAGE_URL;
         const hasCustomImage = course.image_url && course.image_url.trim() !== '';
-        const rawImageUrl = hasCustomImage ? course.image_url : FALLBACK_IMAGE_URL;
+        const rawImageUrl = hasCustomImage ? course.image_url : fallbackImage;
         const imageUrl = hasCustomImage
             ? (rawImageUrl.includes('?') ? rawImageUrl + '&t=' + Date.now() : rawImageUrl + '?t=' + Date.now())
             : rawImageUrl;
 
         document.getElementById('imageGallery').innerHTML = `
             <div class="border border-gray-300 rounded-lg overflow-hidden">
-                <img src="${imageUrl}" alt="${course.name}" class="w-full h-40 object-cover" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE_URL}';">
+                <img src="${imageUrl}" alt="${course.name}" class="w-full h-40 object-cover" onerror="this.onerror=null;this.src='${fallbackImage}';">
                 <div class="p-4 bg-gray-50">
                     <p class="text-sm font-bold text-secondary">${course.name}</p>
                     <p class="text-xs text-gray-600 mt-1 break-all">${course.image_url || 'Imagen genérica'}</p>
@@ -904,6 +921,7 @@ async function loadCourseImages(courseId) {
 const companyAssetTypeLabels = {
     logo: 'Logo principal',
     brand: 'Marca / Imagen institucional',
+    course_fallback: 'Imagen por default de cursos',
     history: 'Historial de talleres',
 };
 
@@ -916,17 +934,35 @@ async function loadCompanyAssets() {
         const assets = response.data || [];
         renderCompanyAssetsList(assets);
         updateCompanyLogoFromAssets(assets);
+        const fallbackChanged = updateCourseFallbackFromAssets(assets);
+
+        if (fallbackChanged) {
+            await loadMisCursos();
+            if (selectedCourseId) {
+                await loadCourseImages(selectedCourseId);
+            }
+        }
     } catch (error) {
         console.error('Error cargando imágenes corporativas:', error);
         renderCompanyAssetsList([]);
         updateCompanyAssetAlert('error', 'Error al cargar las imágenes corporativas.');
         updateCompanyLogoFromAssets([]);
+        const fallbackChanged = updateCourseFallbackFromAssets([]);
+
+        if (fallbackChanged) {
+            await loadMisCursos();
+            if (selectedCourseId) {
+                await loadCourseImages(selectedCourseId);
+            }
+        }
     }
 }
 
 function renderCompanyAssetsList(assets) {
     const container = document.getElementById('companyAssetsList');
     if (!container) return;
+
+    const fallbackImage = courseFallbackImageUrl || DEFAULT_FALLBACK_IMAGE_URL;
 
     if (!assets || assets.length === 0) {
         container.innerHTML = '<p class="text-gray-600 text-center py-8">No hay imágenes registradas todavía.</p>';
@@ -942,7 +978,7 @@ function renderCompanyAssetsList(assets) {
         return acc;
     }, {});
 
-    const typeOrder = ['logo', 'brand', 'history'];
+    const typeOrder = ['logo', 'brand', 'course_fallback', 'history'];
     const renderedTypes = new Set();
     let html = '';
 
@@ -958,7 +994,7 @@ function renderCompanyAssetsList(assets) {
                     ? (asset.image_url.includes('?')
                         ? `${asset.image_url}&t=${Date.now()}`
                         : `${asset.image_url}?t=${Date.now()}`)
-                    : FALLBACK_IMAGE_URL;
+                    : fallbackImage;
 
                 const description = asset.description ? `<p class="text-sm text-gray-600">${escapeHtml(asset.description)}</p>` : '';
                 const title = asset.title ? `<p class="text-base font-semibold text-secondary">${escapeHtml(asset.title)}</p>` : '';
@@ -966,7 +1002,7 @@ function renderCompanyAssetsList(assets) {
 
                 return `
                     <div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                        <img src="${cacheSafeUrl}" alt="${escapeHtml(asset.title || friendlyName)}" class="w-full h-40 object-cover" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE_URL}';">
+                        <img src="${cacheSafeUrl}" alt="${escapeHtml(asset.title || friendlyName)}" class="w-full h-40 object-cover" onerror="this.onerror=null;this.src='${fallbackImage}';">
                         <div class="p-4 space-y-2">
                             <div class="flex items-center justify-between text-sm text-gray-500">
                                 <span class="font-semibold text-secondary">${escapeHtml(friendlyName)}</span>

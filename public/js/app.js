@@ -7,9 +7,12 @@ const publicLogoImg = document.getElementById('publicLogo');
 const publicLogoWrapper = document.getElementById('publicLogoWrapper');
 const brandImageEl = document.getElementById('brandImage');
 const brandFallbackEl = document.getElementById('brandFallback');
+const DEFAULT_FALLBACK_COURSE_IMAGE = '/images/fallback-course.svg';
+let courseFallbackImageUrl = DEFAULT_FALLBACK_COURSE_IMAGE;
 
 // ============= CARGAR CAMBIOS DE MONEDA =============
 let exchangeRates = {};
+let currentCourseFilters = {};
 
 async function loadExchangeRates() {
     try {
@@ -49,6 +52,21 @@ function formatPercent(value) {
         return `${numeric}%`;
     }
     return `${numeric.toFixed(1)}%`;
+}
+
+function resolveCourseImage(rawUrl) {
+    const fallbackImage = courseFallbackImageUrl || DEFAULT_FALLBACK_COURSE_IMAGE;
+
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        return getCacheSafeUrl(fallbackImage) || fallbackImage;
+    }
+
+    const trimmed = rawUrl.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'null') {
+        return getCacheSafeUrl(fallbackImage) || fallbackImage;
+    }
+
+    return getCacheSafeUrl(trimmed);
 }
 
 // ============= UTILIDADES =============
@@ -161,16 +179,36 @@ function applyBrandImage(brandAsset) {
     }
 }
 
+function applyCourseFallbackImage(fallbackAsset) {
+    const fallbackUrl = fallbackAsset?.image_url || DEFAULT_FALLBACK_COURSE_IMAGE;
+    if (courseFallbackImageUrl === fallbackUrl) {
+        return false;
+    }
+
+    courseFallbackImageUrl = fallbackUrl;
+    return true;
+}
+
 async function loadCompanyAssetsPublic() {
     try {
         const response = await fetchAPI('/company-assets');
         const assets = response.data || [];
         applyCompanyLogo(selectAssetByType(assets, 'logo'));
         applyBrandImage(selectAssetByType(assets, 'brand'));
+        const fallbackChanged = applyCourseFallbackImage(selectAssetByType(assets, 'course_fallback'));
+
+        if (fallbackChanged) {
+            loadCourses(currentCourseFilters);
+        }
     } catch (error) {
         console.error('Error al cargar assets corporativos:', error);
         applyCompanyLogo(null);
         applyBrandImage(null);
+        const fallbackChanged = applyCourseFallbackImage(null);
+
+        if (fallbackChanged) {
+            loadCourses(currentCourseFilters);
+        }
     }
 }
 
@@ -254,6 +292,7 @@ document.getElementById('btnRegister').addEventListener('click', () => openModal
 
 // ============= CARGAR CURSOS =============
 async function loadCourses(filters = {}) {
+    currentCourseFilters = { ...filters };
     try {
         let url = '/courses';
         const params = new URLSearchParams();
@@ -279,11 +318,14 @@ async function loadCourses(filters = {}) {
 
         courses.forEach(course => {
             const card = document.createElement('div');
-            card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer overflow-hidden';
+            card.className = 'bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer overflow-hidden flex flex-col';
             card.onclick = () => showCourseDetail(course);
             
-            // Agregar timestamp a la URL para evitar caché
-            const imageUrl = course.image_url ? (course.image_url.includes('?') ? course.image_url + '&t=' + Date.now() : course.image_url + '?t=' + Date.now()) : '';
+            const resolvedImageUrl = resolveCourseImage(course.image_url);
+            const fallbackImage = resolveCourseImage(null);
+            const courseImageHtml = `
+                <img src="${resolvedImageUrl}" alt="${course.name}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='${fallbackImage}';this.onerror=null;">
+            `;
             const priceValue = Number(course.price ?? 0);
             const discountValue = Number(course.discount_amount ?? 0);
             const discountPercent = Number(course.discount_percent ?? 0);
@@ -302,13 +344,15 @@ async function loadCourses(filters = {}) {
             
             card.innerHTML = `
                 <div class="h-48 bg-gradient-to-br from-primary to-blue-900 flex items-center justify-center overflow-hidden">
-                    ${imageUrl ? `<img src="${imageUrl}" alt="${course.name}" class="w-full h-full object-cover" loading="lazy">` : `<span class="text-white text-4xl">📚</span>`}
+                    ${courseImageHtml}
                 </div>
-                <div class="p-4">
-                    <h3 class="font-bold text-lg text-secondary mb-2">${course.name}</h3>
-                    <p class="text-gray-600 text-sm mb-3 line-clamp-2">${course.description}</p>
-                    <div class="flex justify-between items-start">
-                        <span class="text-xs bg-primary text-white px-2 py-1 rounded">${course.level}</span>
+                <div class="p-4 flex flex-col flex-1">
+                    <div class="space-y-2 flex-1">
+                        <h3 class="font-bold text-lg text-secondary leading-snug">${course.name}</h3>
+                        <p class="text-gray-600 text-sm line-clamp-3">${course.description}</p>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between">
+                        <span class="inline-flex items-center text-xs font-semibold text-white bg-primary px-3 py-1 rounded-full uppercase tracking-wide">${course.level}</span>
                         ${priceSection}
                     </div>
                 </div>
@@ -329,12 +373,19 @@ async function loadCategories() {
         const categories = response.data || [];
 
         const select = document.getElementById('categoryFilter');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">Todas las categorías</option>';
         categories.forEach(category => {
             const option = document.createElement('option');
-            option.value = category.id;
+            option.value = category.slug || category.id;
             option.textContent = category.name;
             select.appendChild(option);
         });
+
+        if (currentCourseFilters.category) {
+            select.value = currentCourseFilters.category;
+        }
 
     } catch (error) {
         console.error('Error al cargar categorías:', error);
@@ -342,13 +393,57 @@ async function loadCategories() {
 }
 
 // ============= FILTRADO DE CURSOS =============
-document.getElementById('btnFilter').addEventListener('click', () => {
-    const search = document.getElementById('searchFilter').value;
-    const category = document.getElementById('categoryFilter').value;
-    const level = document.getElementById('levelFilter').value;
+function collectFilterValues() {
+    return {
+        search: document.getElementById('searchFilter')?.value?.trim() || '',
+        category: document.getElementById('categoryFilter')?.value || '',
+        level: document.getElementById('levelFilter')?.value || ''
+    };
+}
 
-    loadCourses({ search, category, level });
-});
+function applyCourseFilters() {
+    loadCourses(collectFilterValues());
+}
+
+document.getElementById('btnFilter').addEventListener('click', applyCourseFilters);
+
+const searchInput = document.getElementById('searchFilter');
+if (searchInput) {
+    searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            applyCourseFilters();
+        }
+    });
+}
+
+const categorySelect = document.getElementById('categoryFilter');
+if (categorySelect) {
+    categorySelect.addEventListener('change', applyCourseFilters);
+}
+
+const levelSelect = document.getElementById('levelFilter');
+if (levelSelect) {
+    levelSelect.addEventListener('change', applyCourseFilters);
+}
+
+const clearFiltersButton = document.getElementById('btnClearFilters');
+function clearCourseFilters() {
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    if (categorySelect) {
+        categorySelect.value = '';
+    }
+    if (levelSelect) {
+        levelSelect.value = '';
+    }
+    applyCourseFilters();
+}
+
+if (clearFiltersButton) {
+    clearFiltersButton.addEventListener('click', clearCourseFilters);
+}
 
 // ============= DETALLE DEL CURSO =============
 async function showCourseDetail(course) {

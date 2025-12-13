@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 
 class CompanyAssetController extends Controller
 {
-    private const ALLOWED_TYPES = ['logo', 'brand', 'history'];
+    private const ALLOWED_TYPES = ['logo', 'brand', 'history', 'course_fallback'];
 
     public function __construct(private readonly FirebaseStorageService $firebaseStorage)
     {
